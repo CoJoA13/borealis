@@ -32,7 +32,7 @@ if [ "$MODE" = restore ]; then
     # plasmashell saves its layout on exit, so stop it before copying files back
     systemctl --user stop plasma-plasmashell.service 2>/dev/null || kquitapp6 plasmashell 2>/dev/null || true
     for f in "$BACKUP"/*; do
-        case "$(basename "$f")" in kdedefaults|gtk-4.0|flatpak-override-added) continue ;; esac
+        case "$(basename "$f")" in kdedefaults|gtk-4.0|flatpak-override-added|bashrc|bashrc.absent) continue ;; esac
         cp -a "$f" "$CONF/"
         echo "  restored $(basename "$f")"
     done
@@ -53,6 +53,8 @@ if [ "$MODE" = restore ]; then
         echo "  restored GTK4 settings"
     fi
     [ -f "$BACKUP/flatpak-override-added" ] && drop_flatpak_override
+    if [ -f "$BACKUP/bashrc" ]; then cp -a "$BACKUP/bashrc" "$HOME/.bashrc"; echo "  restored ~/.bashrc"
+    elif [ -f "$BACKUP/bashrc.absent" ]; then rm -f "$HOME/.bashrc"; fi
     # tell running apps about the restored look
     scheme="$(kreadconfig6 --file kdeglobals --group General --key ColorScheme)"
     cursor="$(kreadconfig6 --file kcminputrc --group Mouse --key cursorTheme)"
@@ -77,7 +79,7 @@ for item in \
     plasma/desktoptheme/Borealis aurorae/themes/Borealis-Dark aurorae/themes/Borealis-Light \
     color-schemes/BorealisDark.colors color-schemes/BorealisLight.colors \
     icons/Borealis-Dark icons/Borealis-Light icons/Borealis-Snow-Cursors icons/Borealis-Ink-Cursors \
-    wallpapers/Borealis plasma/wallpapers/org.borealis.aurora sounds/Borealis \
+    wallpapers/Borealis wallpapers/Borealis-Lock plasma/wallpapers/org.borealis.aurora sounds/Borealis \
     konsole/BorealisDark.colorscheme konsole/BorealisLight.colorscheme \
     "konsole/Borealis Dark.profile" "konsole/Borealis Light.profile" \
     org.kde.syntax-highlighting/themes/borealisdark.theme \
@@ -89,5 +91,14 @@ if [ -f "$CONF/gtk-4.0/$GTKCSS" ]; then
     sed -i "/^@import '$GTKCSS';\$/d" "$CONF/gtk-4.0/gtk.css" 2>/dev/null || true
     echo "  - ~/.config/gtk-4.0/$GTKCSS"
     drop_flatpak_override
+fi
+if [ -d "$CONF/borealis/terminal" ]; then
+    rm -rf "$CONF/borealis/terminal"
+    rmdir "$CONF/borealis" 2>/dev/null || true
+    rm -f "$CONF/bat/themes/Borealis "*.tmTheme
+    command -v bat >/dev/null && bat cache --build >/dev/null 2>&1 || true
+    sed -i '/# Borealis colors for the command line/d;\#source .*/borealis/terminal/borealis-.*\.bash#d' \
+        "$HOME/.bashrc" 2>/dev/null || true
+    echo "  - ~/.config/borealis/terminal (and its ~/.bashrc line)"
 fi
 echo "Borealis removed from $DEST."

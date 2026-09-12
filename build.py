@@ -48,6 +48,7 @@ def step_wallpaper():
     import gen_wallpaper
     night, dawn = wallpapers()
     gen_wallpaper.package(OUT, night, dawn)
+    gen_wallpaper.lock_package(OUT, night, dawn)
 
 
 def step_plasmastyle():
@@ -90,6 +91,11 @@ def step_plymouth():
     gen_plymouth.build(OUT)
 
 
+def step_terminal():
+    import gen_terminal
+    gen_terminal.build(OUT)
+
+
 def step_gtk():
     import gen_gtk
     gen_gtk.build(OUT)
@@ -113,6 +119,7 @@ STEPS = {
     "sounds": step_sounds,
     "live": step_live,
     "plymouth": step_plymouth,
+    "terminal": step_terminal,
     "gtk": step_gtk,
     "lnf": step_lnf,
 }

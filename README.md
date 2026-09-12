@@ -33,6 +33,7 @@ Built for Fedora 44 / Plasma 6.7.
 | Boot splash | Borealis (Plymouth) | Same logo and aurora spinner from power-on |
 | Desktop layout | built into each Global Theme | Floating top bar (launcher, global menu, centered clock, tray) + floating dock |
 | Konsole / Kate | Borealis Dark / Light | Terminal schemes + profiles, editor themes |
+| Command line | bat, tmux, git, `ls`, fzf, bash prompt | One palette for the terminal's contents too (`--terminal`) |
 | GTK4 / libadwaita | `borealis-libadwaita.css` | Borealis surfaces and the exact accent for GNOME apps, light/dark live (GTK3 apps already follow via Breeze-GTK) |
 
 ## Install
@@ -61,6 +62,7 @@ Or apply from the terminal — it backs up your settings first and prints the un
 | `--konsole` | make the Borealis profile Konsole's default |
 | `--gtk` | Borealis colors for GTK4/libadwaita apps |
 | `--flatpak` | same for Flatpak apps (implies `--gtk`; gives every Flatpak read-only access to `~/.config/gtk-4.0`) |
+| `--terminal` | bat, tmux, git, `ls`, fzf and prompt colors (adds one line to `~/.bashrc`) |
 
 `--apply` also sets the Borealis wallpaper on the lock screen (Fedora otherwise
 pins its own) and switches to the Borealis sound theme.
@@ -73,9 +75,11 @@ To remove the files: switch to another Global Theme, then `./uninstall.sh --remo
 *Desktop › Configure Desktop and Wallpaper › Wallpaper type › Borealis Aurora*
 (and the same under *Screen Locking › Appearance*). Settings: sky (follow the
 color scheme / always night / always dawn), speed, brightness, twinkling, frame
-rate, and the two power savers. It renders the aurora at half resolution and
-~24 fps, and stops completely behind maximized/fullscreen windows, on battery,
-or when animations are turned off.
+rate, and the power savers. It renders the aurora at half resolution and ~24 fps,
+stops completely behind maximized/fullscreen windows and when animations are
+turned off, and on battery slows to 10 fps (or pauses, or keeps going — your
+choice). On the lock screen it runs at most 15 fps, because Plasma re-renders
+the wallpaper through a blur there.
 
 ### Day/night switching
 
@@ -107,6 +111,8 @@ Then *System Settings › Login Screen* › **Apply Plasma Settings…** and, un
   back to Breeze and keeps its folders, app icons and logo.
 - **Lock screen**: Plasma 6.7 doesn't let Global Themes replace its layout;
   Borealis styles it through colors, Plasma Style and the (animated) wallpaper.
+  Plasma always draws the lock-screen clock in white, so the light variant uses
+  a dimmed copy of the dawn wallpaper (`Borealis-Lock`) to keep it readable.
 
 ## Rebuild / customize
 
@@ -116,11 +122,15 @@ Everything is generated from Python (PIL, pycairo, librsvg via GObject; Qt's
 ```bash
 ./build.py                  # everything → build/share
 ./build.py plasmastyle      # or one step: colors apps cursors wallpaper plasmastyle
-                            #   aurorae icons sounds live plymouth gtk lnf
-tools/contrast.py           # WCAG audit of every text/background pair
+                            #   aurorae icons sounds live plymouth gtk terminal lnf
+tools/check.py              # QML, SVG, JSON, package, Plymouth and WCAG checks
+tools/contrast.py           # just the WCAG audit, pair by pair
 tools/testsession.py dark   # screenshots from an isolated, off-screen Plasma session
 tools/package.py            # KDE Store archives → dist/ (see STORE.md)
 ```
+
+With `make` installed, `make`, `make check`, `make test`, `make package` and
+`make apply` wrap the same scripts.
 
 Palette, radii and translucency live in `src/tokens.py`.
 

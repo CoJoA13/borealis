@@ -29,7 +29,7 @@ ARCHIVES = {
     "Borealis-Snow-cursors": ("Cursors", ["icons/Borealis-Snow-Cursors"]),
     "Borealis-Ink-cursors": ("Cursors", ["icons/Borealis-Ink-Cursors"]),
     "Borealis-icons": ("Full Icon Themes", ["icons/Borealis-Dark", "icons/Borealis-Light"]),
-    "Borealis-wallpaper": ("Wallpapers KDE Plasma", ["wallpapers/Borealis"]),
+    "Borealis-wallpaper": ("Wallpapers KDE Plasma", ["wallpapers/Borealis", "wallpapers/Borealis-Lock"]),
     "Borealis-Aurora-animated-wallpaper": ("Plasma 6 Wallpaper Plugins",
                                            ["plasma/wallpapers/org.borealis.aurora"]),
     "Borealis-sound-theme": ("System Sounds", ["sounds/Borealis"]),
@@ -41,6 +41,7 @@ ARCHIVES = {
                                                     "org.kde.syntax-highlighting/themes/borealislight.theme"]),
     "Borealis-plymouth": ("Plymouth Themes", ["plymouth/themes/borealis"]),
     "Borealis-gtk4": ("GTK4/libadwaita Themes", ["gtk/borealis"]),
+    "Borealis-terminal": ("Terminal / CLI", ["terminal/borealis"]),
 }
 
 

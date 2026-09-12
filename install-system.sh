@@ -23,7 +23,7 @@ ITEMS=(
     "aurorae/themes/Borealis-Dark" "aurorae/themes/Borealis-Light"
     "icons/Borealis-Dark" "icons/Borealis-Light"
     "icons/Borealis-Snow-Cursors" "icons/Borealis-Ink-Cursors"
-    "wallpapers/Borealis"
+    "wallpapers/Borealis" "wallpapers/Borealis-Lock"
 )
 
 PLY=/usr/share/plymouth/themes/borealis

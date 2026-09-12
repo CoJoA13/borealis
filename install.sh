@@ -11,6 +11,7 @@
 #   --konsole   make the matching Borealis profile Konsole's default
 #   --live      use the animated Borealis Aurora wallpaper (desktop + lock screen)
 #   --gtk       Borealis colors for GTK4/libadwaita apps
+#   --terminal  Borealis for bat, tmux, git, ls, fzf and the bash prompt
 #   --flatpak   ...for Flatpak apps too (implies --gtk; lets every Flatpak app
 #               read ~/.config/gtk-4.0, read-only)
 #
@@ -24,7 +25,7 @@ DEST="${XDG_DATA_HOME:-$HOME/.local/share}"
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}"
 GTKCSS="borealis-libadwaita.css"
 
-APPLY=""; LAYOUT=0; AUTO=0; KONSOLE=0; LIVE=0; GTK=0; FLATPAK=0
+APPLY=""; LAYOUT=0; AUTO=0; KONSOLE=0; LIVE=0; GTK=0; FLATPAK=0; TERMINAL=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --apply) APPLY="${2:-}"; shift 2 ;;
@@ -34,13 +35,14 @@ while [ $# -gt 0 ]; do
         --live) LIVE=1; shift ;;
         --gtk) GTK=1; shift ;;
         --flatpak) GTK=1; FLATPAK=1; shift ;;
-        -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+        --terminal) TERMINAL=1; shift ;;
+        -h|--help) sed -n '2,21p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
 case "$APPLY" in ""|dark|light) ;; *) echo "--apply takes 'dark' or 'light'" >&2; exit 2 ;; esac
-if [ -z "$APPLY" ] && { [ $LAYOUT = 1 ] || [ $AUTO = 1 ] || [ $KONSOLE = 1 ] || [ $LIVE = 1 ] || [ $GTK = 1 ]; }; then
-    echo "--layout, --auto, --konsole, --live, --gtk and --flatpak need --apply dark|light" >&2; exit 2
+if [ -z "$APPLY" ] && { [ $LAYOUT = 1 ] || [ $AUTO = 1 ] || [ $KONSOLE = 1 ] || [ $LIVE = 1 ] || [ $GTK = 1 ] || [ $TERMINAL = 1 ]; }; then
+    echo "--layout, --auto, --konsole, --live, --gtk, --flatpak and --terminal need --apply dark|light" >&2; exit 2
 fi
 
 if [ ! -d "$SRC" ]; then
@@ -62,6 +64,7 @@ ITEMS=(
     "icons/Borealis-Snow-Cursors"
     "icons/Borealis-Ink-Cursors"
     "wallpapers/Borealis"
+    "wallpapers/Borealis-Lock"
     "plasma/wallpapers/org.borealis.aurora"
     "sounds/Borealis"
     "konsole/BorealisDark.colorscheme"
@@ -104,6 +107,9 @@ for f in kdeglobals kwinrc kcminputrc plasmarc ksplashrc kscreenlockerrc konsole
     if [ -f "$CONF/$f" ]; then cp -a "$CONF/$f" "$BACKUP/"; else echo "$f" >> "$BACKUP/.absent"; fi
 done
 if [ -d "$CONF/kdedefaults" ]; then cp -a "$CONF/kdedefaults" "$BACKUP/kdedefaults"; fi
+if [ $TERMINAL = 1 ]; then
+    if [ -f "$HOME/.bashrc" ]; then cp -a "$HOME/.bashrc" "$BACKUP/bashrc"; else touch "$BACKUP/bashrc.absent"; fi
+fi
 if [ $GTK = 1 ]; then
     mkdir -p "$BACKUP/gtk-4.0"
     if [ -f "$CONF/gtk-4.0/gtk.css" ]; then cp -a "$CONF/gtk-4.0/gtk.css" "$BACKUP/gtk-4.0/"; else touch "$BACKUP/gtk-4.0/.absent"; fi
@@ -127,7 +133,7 @@ else
 fi
 # Fedora pins the lock screen to its own wallpaper; point it at Borealis
 kwriteconfig6 --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image \
-    --group General --key Image "file://$DEST/wallpapers/Borealis/"
+    --group General --key Image "file://$DEST/wallpapers/Borealis-Lock/"
 if [ $KONSOLE = 1 ]; then
     kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile "$PROFILE"
 fi
@@ -138,6 +144,18 @@ if [ $LIVE = 1 ]; then
         'var d = desktops(); for (var i = 0; i < d.length; i++) { d[i].wallpaperPlugin = "org.borealis.aurora"; }' \
         >/dev/null 2>&1 || echo "  (couldn't reach plasmashell; pick 'Borealis Aurora' under Configure Desktop › Wallpaper)"
     kwriteconfig6 --file kscreenlockerrc --group Greeter --key WallpaperPlugin org.borealis.aurora
+fi
+if [ $TERMINAL = 1 ]; then
+    TERMDIR="$CONF/borealis/terminal"
+    mkdir -p "$TERMDIR" "$CONF/bat/themes"
+    cp "$SRC/terminal/borealis/"* "$TERMDIR/"
+    cp "$SRC/terminal/borealis/"*.tmTheme "$CONF/bat/themes/"
+    command -v bat >/dev/null && bat cache --build >/dev/null 2>&1 || true
+    LINE="source $TERMDIR/borealis-$APPLY.bash"
+    if ! grep -qxF "$LINE" "$HOME/.bashrc" 2>/dev/null; then
+        printf '\n# Borealis colors for the command line\n%s\n' "$LINE" >> "$HOME/.bashrc"
+    fi
+    echo "  terminal kit in $TERMDIR (new shells pick it up; see its README.md for tmux and git)"
 fi
 if [ $GTK = 1 ]; then
     # our own file + one import line; KDE rewrites gtk.css but keeps extra lines

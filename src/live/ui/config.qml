@@ -19,7 +19,7 @@ Kirigami.FormLayout {
     property alias cfg_Twinkle: twinkle.checked
     property alias cfg_Fps: fps.value
     property alias cfg_PauseWhenCovered: covered.checked
-    property alias cfg_PauseOnBattery: battery.checked
+    property int cfg_BatteryMode
 
     QQC2.ComboBox {
         Kirigami.FormData.label: i18nd("plasma_wallpaper_org.borealis.aurora", "Sky:")
@@ -69,8 +69,10 @@ Kirigami.FormLayout {
         text: i18nd("plasma_wallpaper_org.borealis.aurora", "Pause behind maximized or fullscreen windows")
     }
 
-    QQC2.CheckBox {
-        id: battery
-        text: i18nd("plasma_wallpaper_org.borealis.aurora", "Pause on battery")
+    QQC2.ComboBox {
+        Kirigami.FormData.label: i18nd("plasma_wallpaper_org.borealis.aurora", "On battery:")
+        model: [i18nd("plasma_wallpaper_org.borealis.aurora", "Keep going"), i18nd("plasma_wallpaper_org.borealis.aurora", "Slow down"), i18nd("plasma_wallpaper_org.borealis.aurora", "Pause")]
+        currentIndex: root.cfg_BatteryMode
+        onActivated: index => root.cfg_BatteryMode = index
     }
 }

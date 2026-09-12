@@ -25,11 +25,23 @@ WallpaperItem {
     readonly property bool reducedMotion: Kirigami.Units.longDuration <= 1
     readonly property bool covered: pauseLoader.item ? pauseLoader.item.covered : false
     readonly property bool onBattery: powerLoader.item ? powerLoader.item.onBattery : false
+    // on battery: 0 = keep going, 1 = slow down, 2 = pause
+    readonly property int batteryMode: root.configuration.BatteryMode
     readonly property bool animating: visible && !software && !reducedMotion
         && !(root.configuration.PauseWhenCovered && covered)
-        && !(root.configuration.PauseOnBattery && onBattery)
-    // the lock screen blurs every frame again; keep it cheaper there
-    readonly property int fps: Math.max(5, Math.min(onLockScreen ? 15 : 60, root.configuration.Fps))
+        && !(onBattery && batteryMode === 2)
+    // the lock screen blurs every frame again, and a slow aurora still reads
+    // as alive; both are cheaper than the configured rate
+    readonly property int fps: {
+        let f = Math.min(60, root.configuration.Fps);
+        if (onLockScreen) {
+            f = Math.min(f, 15);
+        }
+        if (onBattery && batteryMode === 1) {
+            f = Math.min(f, 10);
+        }
+        return Math.max(5, f);
+    }
 
     // "accent color from wallpaper" would otherwise sample a random frame
     accentColor: night ? "#8b9cff" : "#5566e0"
@@ -124,7 +136,7 @@ WallpaperItem {
     }
     Loader {
         id: powerLoader
-        active: root.configuration.PauseOnBattery
+        active: root.batteryMode !== 0
         source: "PowerState.qml"
     }
 }

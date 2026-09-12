@@ -81,6 +81,56 @@ GLYPHS = {
              f'<circle {F} cx="64" cy="84" r="4.5"/>',
     "search": f'<circle {S} stroke-width="9" cx="58" cy="58" r="19"/>'
               f'<path {S} stroke-width="11" d="M73 73 L90 90"/>',
+    "store": f'<path fill="url(#g)" fill-opacity="0.22" d="M40 50 H88 L84 92 a6 6 0 0 1 -6 5 H50 '
+             f'a6 6 0 0 1 -6 -5 z"/>'
+             f'<path {S} stroke-width="7" d="M40 50 H88 L84 92 a6 6 0 0 1 -6 5 H50 a6 6 0 0 1 -6 -5 z"/>'
+             f'<path {SW} stroke-opacity="0.8" stroke-width="6" d="M54 58 V44 a10 10 0 0 1 20 0 V58"/>',
+    "office": f'<path {S} stroke-width="7" d="M42 96 V38 a6 6 0 0 1 6 -6 H72 L88 48 V96"/>'
+              f'<path {SW} stroke-opacity="0.5" stroke-width="5" d="M72 32 V48 H88"/>'
+              f'<path {SW} stroke-opacity="0.8" stroke-width="6" d="M54 62 H76 M54 76 H76 M54 88 H68"/>',
+    "chip": f'<rect {S} stroke-width="7" x="42" y="42" width="44" height="44" rx="9"/>'
+            f'<rect {F} x="55" y="55" width="18" height="18" rx="4"/>'
+            f'<path {SW} stroke-opacity="0.7" stroke-width="5" d="M54 42 V30 M74 42 V30 M54 86 V98 M74 86 V98 '
+            f'M42 54 H30 M42 74 H30 M86 54 H98 M86 74 H98"/>',
+    "wallet": f'<path {S} stroke-width="7" d="M36 50 a6 6 0 0 1 6 -6 H80 a6 6 0 0 1 6 6 V54"/>'
+              f'<rect {S} stroke-width="7" x="36" y="50" width="56" height="42" rx="9"/>'
+              f'<circle fill="#f2f4fa" fill-opacity="0.9" cx="78" cy="71" r="6"/>',
+    "key": f'<circle {S} stroke-width="8" cx="52" cy="52" r="15"/>'
+           f'<path {S} stroke-width="8" d="M62 62 L92 92"/>'
+           f'<path {SW} stroke-opacity="0.8" stroke-width="7" d="M80 80 L72 88 M88 88 L82 94"/>',
+    "clipboard": f'<path {S} stroke-width="7" d="M50 40 H44 a6 6 0 0 0 -6 6 V90 a6 6 0 0 0 6 6 H84 '
+                 f'a6 6 0 0 0 6 -6 V46 a6 6 0 0 0 -6 -6 H78"/>'
+                 f'<rect {F} x="50" y="30" width="28" height="18" rx="6"/>'
+                 f'<path {SW} stroke-opacity="0.7" stroke-width="5" d="M52 64 H76 M52 78 H68"/>',
+    "bolt": f'<path {F} d="M72 30 L42 70 H60 L56 98 L86 58 H68 z"/>',
+    "mail": f'<rect {S} stroke-width="7" x="32" y="42" width="64" height="46" rx="9"/>'
+            f'<path {SW} stroke-opacity="0.85" stroke-width="6" d="M36 50 L64 70 L92 50"/>',
+    "calendar": f'<rect {S} stroke-width="7" x="34" y="40" width="60" height="54" rx="9"/>'
+                f'<path {F} d="M34 49 a9 9 0 0 1 9 -9 H85 a9 9 0 0 1 9 9 V58 H34 z"/>'
+                f'<path {SW} stroke-opacity="0.8" stroke-width="6" d="M48 32 V44 M80 32 V44"/>'
+                + "".join(f'<circle fill="#f2f4fa" fill-opacity="0.75" cx="{x}" cy="{y}" r="4"/>'
+                          for y in (70, 83) for x in (48, 64, 80)),
+    "contact": f'<rect {S} stroke-width="7" x="32" y="38" width="64" height="52" rx="9"/>'
+               f'<circle {F} cx="55" cy="58" r="9"/>'
+               f'<path {F} d="M40 80 a15 15 0 0 1 30 0 z"/>'
+               f'<path {SW} stroke-opacity="0.7" stroke-width="5" d="M76 56 H88 M76 68 H88"/>',
+    "font": f'<path {S} stroke-width="9" d="M38 90 L60 38 L82 90"/>'
+            f'<path {S} stroke-width="8" d="M47 72 H73"/>'
+            f'<path {SW} stroke-opacity="0.6" stroke-width="5" d="M34 98 H94"/>',
+    "camera": f'<path {S} stroke-width="7" d="M32 56 a6 6 0 0 1 6 -6 H50 L56 40 H72 L78 50 H90 a6 6 0 0 1 6 6 '
+              f'V86 a6 6 0 0 1 -6 6 H38 a6 6 0 0 1 -6 -6 z"/>'
+              f'<circle {S} stroke-width="7" cx="64" cy="70" r="14"/>',
+    "scanner": f'<rect {S} stroke-width="7" x="30" y="62" width="68" height="30" rx="9"/>'
+               f'<path {F} d="M44 30 H84 a4 4 0 0 1 4 4 V52 H40 V34 a4 4 0 0 1 4 -4 z"/>'
+               f'<path {SW} stroke-opacity="0.85" stroke-width="6" d="M42 76 H74"/>',
+    "remote": f'<rect {S} stroke-width="7" x="30" y="36" width="52" height="38" rx="8"/>'
+              f'<path {SW} stroke-opacity="0.55" stroke-width="6" d="M46 84 H66"/>'
+              f'<path {S} stroke-width="7" d="M56 74 V84"/>'
+              f'<rect fill="url(#bg)" x="62" y="60" width="40" height="38" rx="8"/>'
+              f'<rect {S} stroke-width="7" x="62" y="60" width="36" height="34" rx="8"/>',
+    "speech": f'<path {S} stroke-width="7" d="M34 52 a10 10 0 0 1 10 -10 H84 a10 10 0 0 1 10 10 V76 '
+              f'a10 10 0 0 1 -10 10 H60 L42 98 V86 a8 8 0 0 1 -8 -8 z"/>'
+              f'<path {SW} stroke-opacity="0.8" stroke-width="6" d="M48 58 H80 M48 70 H70"/>',
 }
 
 # glyph -> icon names it answers to (desktop Icon= values + generic names)
@@ -106,6 +156,21 @@ NAMES = {
     "disk": ["filelight", "org.kde.filelight", "org.gnome.baobab", "baobab"],
     "phone": ["kdeconnect", "org.kde.kdeconnect.app"],
     "search": ["kfind", "org.kde.kfind"],
+    "store": ["io.github.kolunmi.Bazaar"],
+    "office": ["org.onlyoffice.desktopeditors", "onlyoffice-desktopeditors"],
+    "chip": ["org.gnome.Firmware", "gnome-firmware"],
+    "wallet": ["kwalletmanager", "org.kde.kwalletmanager5"],
+    "key": ["kleopatra", "org.kde.kleopatra"],
+    "clipboard": ["klipper", "org.kde.klipper"],
+    "bolt": ["krunner", "org.kde.krunner"],
+    "mail": ["kmail", "org.kde.kmail2", "kontact", "org.kde.kontact"],
+    "calendar": ["korganizer", "org.kde.korganizer"],
+    "contact": ["kaddressbook", "org.kde.kaddressbook"],
+    "font": ["kfontview", "org.kde.kfontview"],
+    "camera": ["kamoso", "org.kde.kamoso"],
+    "scanner": ["skanpage", "org.kde.skanpage", "skanlite"],
+    "remote": ["krdc", "org.kde.krdc", "krfb", "org.kde.krfb"],
+    "speech": ["kmouth", "org.kde.kmouth"],
 }
 
 

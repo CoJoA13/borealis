@@ -389,11 +389,10 @@ def export(img, folder):
                                 quality=94, subsampling=0, optimize=True)
 
 
-def package(out_root, night, dawn):
-    """share/wallpapers/Borealis: images/ = light (dawn), images_dark/ = night."""
+def _package(out_root, pkg_id, name, desc, night, dawn):
     import json
     from tokens import AUTHOR, EMAIL, LICENSE
-    base = os.path.join(out_root, "wallpapers", "Borealis")
+    base = os.path.join(out_root, "wallpapers", pkg_id)
     export(dawn, os.path.join(base, "contents", "images"))
     export(night, os.path.join(base, "contents", "images_dark"))
     shot = Image.new("RGB", (800, 500))
@@ -402,12 +401,27 @@ def package(out_root, night, dawn):
     shot.save(os.path.join(base, "contents", "screenshot.png"))
     meta = {"KPackageStructure": "Wallpaper/Images",
             "KPlugin": {"Authors": [{"Name": AUTHOR, "Email": EMAIL}],
-                        "Id": "Borealis", "Name": "Borealis",
-                        "Description": "Aurora over the mountains — dawn and night",
+                        "Id": pkg_id, "Name": name,
+                        "Description": desc,
                         "License": LICENSE}}
     with open(os.path.join(base, "metadata.json"), "w") as f:
         json.dump(meta, f, indent=4)
     return base
+
+
+def package(out_root, night, dawn):
+    """share/wallpapers/Borealis: images/ = light (dawn), images_dark/ = night."""
+    return _package(out_root, "Borealis", "Borealis",
+                    "Aurora over the mountains — dawn and night", night, dawn)
+
+
+def lock_package(out_root, night, dawn):
+    """A dimmer dawn for the lock screen: Plasma draws its clock in white there,
+    whatever the color scheme, and the bright dawn sky leaves it hard to read."""
+    dim = ImageEnhance.Color(ImageEnhance.Brightness(dawn).enhance(0.62)).enhance(0.92)
+    return _package(out_root, "Borealis-Lock", "Borealis (lock screen)",
+                    "Aurora over the mountains, dimmed for white lock-screen text",
+                    night, dim)
 
 
 def main(out_dir):

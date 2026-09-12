@@ -29,9 +29,9 @@
       <label>Pause while a maximized or fullscreen window covers the screen</label>
       <default>true</default>
     </entry>
-    <entry name="PauseOnBattery" type="Bool">
-      <label>Pause while running on battery</label>
-      <default>true</default>
+    <entry name="BatteryMode" type="Int">
+      <label>On battery: 0 = keep going, 1 = slow down, 2 = pause</label>
+      <default>1</default>
     </entry>
   </group>
 </kcfg>
