@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- No masks / clip paths / filters: must render identically in Qt SVG. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="2" x2="0" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#232c52"/>
+      <stop offset="0.6" stop-color="#121830"/>
+      <stop offset="1" stop-color="#0b0f19"/>
+    </linearGradient>
+    <linearGradient id="band" x1="3" y1="0" x2="61" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5fe0c8"/>
+      <stop offset="0.55" stop-color="#8b9cff"/>
+      <stop offset="1" stop-color="#b18cff"/>
+    </linearGradient>
+    <linearGradient id="skyfade" x1="0" y1="44" x2="0" y2="6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1b2344" stop-opacity="0"/>
+      <stop offset="0.55" stop-color="#1e2749" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#232c52" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="ray" x1="0" y1="44" x2="0" y2="12" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="30" fill="url(#sky)"/>
+  <!-- curtain: tint, then fade it back into the sky towards the top -->
+  <path id="curtain" fill="url(#band)" fill-opacity="0.55"
+        d="M3.7 42.2 C 13 34, 22 46.5, 34 37 S 52 22.5, 61.2 25.2 A 30 30 0 1 0 3.7 42.2 Z"/>
+  <path fill="url(#skyfade)"
+        d="M3.7 42.2 C 13 34, 22 46.5, 34 37 S 52 22.5, 61.2 25.2 A 30 30 0 1 0 3.7 42.2 Z"/>
+  <g stroke="url(#ray)" stroke-width="2.2" stroke-linecap="round">
+    <path d="M10 38 L11 20"/><path d="M16 38 L17 14"/><path d="M22 40.5 L23 18"/>
+    <path d="M28 40 L29 12"/><path d="M34 36 L35 9"/><path d="M40 32 L41 8"/>
+    <path d="M46 28 L47 12"/><path d="M52 25 L53 14"/><path d="M57 24.5 L58 18"/>
+  </g>
+  <!-- ribbon edge -->
+  <path d="M3.7 42.2 C 13 34, 22 46.5, 34 37 S 52 22.5, 61.2 25.2" fill="none"
+        stroke="url(#band)" stroke-width="4.5" stroke-linecap="butt"/>
+  <!-- hills -->
+  <path fill="#070a12"
+        d="M9.6 52 L18 54.5 L28 46 L38 55 L46 50.5 L52.5 52.5 L57.4 48 A 30 30 0 0 1 9.6 52 Z"/>
+  <!-- stars -->
+  <path d="M46 8 L47.3 11.7 L51 13 L47.3 14.3 L46 18 L44.7 14.3 L41 13 L44.7 11.7 Z" fill="#f2f4fa"/>
+  <circle cx="19" cy="14" r="0.9" fill="#f2f4fa" fill-opacity="0.8"/>
+  <circle cx="29" cy="7.5" r="0.7" fill="#f2f4fa" fill-opacity="0.6"/>
+  <circle cx="32" cy="32" r="29.4" fill="none" stroke="#8b9cff" stroke-opacity="0.45" stroke-width="1.2"/>
+</svg>

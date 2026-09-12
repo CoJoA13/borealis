@@ -1,0 +1,122 @@
+/*
+    Borealis splash screen.
+    SPDX-FileCopyrightText: 2014 Marco Martin <mart@kde.org> (structure from Breeze)
+    SPDX-License-Identifier: GPL-2.0-or-later
+*/
+
+import QtQuick
+import org.kde.kirigami as Kirigami
+
+Rectangle {
+    id: root
+    color: "@BASE@"
+
+    property int stage
+
+    onStageChanged: {
+        if (stage == 2) {
+            introAnimation.running = true;
+        }
+    }
+
+    Image {
+        anchors.fill: parent
+        source: "images/backdrop.jpg"
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+    }
+
+    Item {
+        id: content
+        anchors.fill: parent
+        opacity: 0
+
+        Column {
+            anchors.centerIn: parent
+            spacing: Kirigami.Units.gridUnit
+
+            Item {
+                readonly property real size: Kirigami.Units.gridUnit * 6
+                width: size
+                height: size
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                Image {
+                    anchors.centerIn: parent
+                    width: parent.size * 2.4
+                    height: width
+                    source: "images/halo.svg"
+                    sourceSize.width: width
+                    sourceSize.height: height
+                    asynchronous: true
+                    opacity: 0.55
+
+                    SequentialAnimation on opacity {
+                        loops: Animation.Infinite
+                        running: Kirigami.Units.longDuration > 1
+                        NumberAnimation { to: 0.9; duration: 1800; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: 0.45; duration: 1800; easing.type: Easing.InOutSine }
+                    }
+                }
+
+                Image {
+                    anchors.fill: parent
+                    source: "images/logo.svg"
+                    sourceSize.width: width
+                    sourceSize.height: height
+                    asynchronous: true
+                }
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Borealis"
+                color: "@TEXT@"
+                font.pixelSize: Math.round(Kirigami.Units.gridUnit * 1.5)
+                font.weight: Font.Light
+                font.letterSpacing: Math.round(Kirigami.Units.gridUnit * 0.5)
+                textFormat: Text.PlainText
+                Accessible.name: text
+                Accessible.role: Accessible.StaticText
+            }
+
+            Item { width: 1; height: Kirigami.Units.smallSpacing }
+
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Kirigami.Units.gridUnit * 10
+                height: 4
+                radius: 2
+                color: "@TRACK@"
+
+                Rectangle {
+                    height: parent.height
+                    radius: parent.radius
+                    width: parent.width * Math.min(1, Math.max(0.06, root.stage / 6))
+                    Behavior on width {
+                        NumberAnimation {
+                            duration: Kirigami.Units.longDuration * 3
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "#5fe0c8" }
+                        GradientStop { position: 0.55; color: "#8b9cff" }
+                        GradientStop { position: 1.0; color: "#b18cff" }
+                    }
+                }
+            }
+        }
+    }
+
+    OpacityAnimator {
+        id: introAnimation
+        running: false
+        target: content
+        from: 0
+        to: 1
+        duration: Kirigami.Units.veryLongDuration * 2
+        easing.type: Easing.InOutQuad
+    }
+}

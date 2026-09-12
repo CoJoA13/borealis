@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="Variant" type="Int">
+      <label>0 = follow the color scheme, 1 = always night, 2 = always dawn</label>
+      <default>0</default>
+    </entry>
+    <entry name="Speed" type="Double">
+      <label>Animation speed multiplier</label>
+      <default>1.0</default>
+    </entry>
+    <entry name="Intensity" type="Int">
+      <label>Aurora brightness in percent</label>
+      <default>100</default>
+    </entry>
+    <entry name="Twinkle" type="Bool">
+      <label>Let the stars twinkle</label>
+      <default>true</default>
+    </entry>
+    <entry name="Fps" type="Int">
+      <label>Frames per second</label>
+      <default>24</default>
+    </entry>
+    <entry name="PauseWhenCovered" type="Bool">
+      <label>Pause while a maximized or fullscreen window covers the screen</label>
+      <default>true</default>
+    </entry>
+    <entry name="PauseOnBattery" type="Bool">
+      <label>Pause while running on battery</label>
+      <default>true</default>
+    </entry>
+  </group>
+</kcfg>
