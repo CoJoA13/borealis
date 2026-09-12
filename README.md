@@ -14,6 +14,10 @@ Built for Fedora 44 / Plasma 6.7.
 
 ![GTK4 / libadwaita app in Borealis Dark and Light](docs/gtk.jpg)
 
+| Borealis Tweaks |
+|---|
+| ![Borealis Tweaks](docs/tweaks.jpg) |
+
 ## What's inside
 
 | Component | Name(s) | Notes |
