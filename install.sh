@@ -59,8 +59,9 @@ fi
 
 # Everything the build produced, discovered rather than hard-coded, so a remix
 # (./build.py --accent … --name "Borealis Ember") installs the same way.
-CATEGORIES=(plasma/look-and-feel plasma/desktoptheme plasma/wallpapers aurorae/themes
-            color-schemes icons wallpapers sounds konsole org.kde.syntax-highlighting/themes)
+CATEGORIES=(plasma/look-and-feel plasma/desktoptheme plasma/wallpapers plasma/plasmoids
+            aurorae/themes color-schemes icons wallpapers sounds konsole
+            org.kde.syntax-highlighting/themes)
 ITEMS=()
 for cat in "${CATEGORIES[@]}"; do
     [ -d "$SRC/$cat" ] || continue

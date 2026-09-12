@@ -142,6 +142,10 @@ PACKAGES = {
     "sounds/Borealis": ["index.theme", "stereo/message-new-instant.oga", "stereo/desktop-login.oga"],
     "plymouth/themes/borealis": ["borealis.plymouth", "lock.png", "entry.png", "bullet.png",
                                  "watermark.png", "throbber-0001.png"],
+    "plasma/plasmoids/org.borealis.dock": ["metadata.json", "contents/ui/main.qml",
+                                           "contents/config/main.xml"],
+    "plasma/plasmoids/org.borealis.quicksettings": ["metadata.json", "contents/ui/main.qml",
+                                                    "contents/ui/Backend.qml"],
     "gtk/borealis": ["borealis-libadwaita.css"],
     "terminal/borealis": ["Borealis Dark.tmTheme", "tmux-dark.conf", "dircolors-dark",
                           "git-dark.conf", "borealis-dark.bash", "README.md"],
@@ -166,6 +170,40 @@ def check_packages():
                 missing.append(f"{pkg}/{rel}")
     bad("packages", f"{len(missing)} missing: " + ", ".join(missing[:6])) if missing \
         else ok("packages", f"{len(PACKAGES)} packages complete")
+
+
+def check_installer():
+    """Everything the build produces has to be installed by something.
+
+    install.sh discovers most of it from a category list; the rest is handled
+    by name. A component missing from both lands in ~/.local/share never, and
+    Plasma then refuses widgets whose package "does not exist"."""
+    script = os.path.join(HERE, "install.sh")
+    if not (os.path.isdir(SHARE) and os.path.exists(script)):
+        return skip("installer", "need build/share and install.sh")
+    text = open(script).read()
+    # the categories install.sh walks, plus what it copies by name
+    cats = re.search(r"CATEGORIES=\((.*?)\)", text, re.S)
+    known = set(cats.group(1).split()) if cats else set()
+    handled = {"gtk", "terminal", "applications", "firefox",       # explicit blocks
+               "plymouth", "grub"}                                 # install-system.sh
+    missing = []
+    for entry in sorted(os.listdir(SHARE)):
+        path = os.path.join(SHARE, entry)
+        if not os.path.isdir(path) or entry in handled or entry.endswith("-tweaks"):
+            continue
+        if entry in known:
+            continue
+        # a nested category like plasma/plasmoids
+        subs = [f"{entry}/{sub}" for sub in os.listdir(path)]
+        if any(sub in known for sub in subs) and all(
+                sub in known or not os.path.isdir(os.path.join(SHARE, sub)) for sub in subs):
+            continue
+        for sub in subs:
+            if os.path.isdir(os.path.join(SHARE, sub)) and sub not in known:
+                missing.append(sub)
+    bad("installer", "built but never installed: " + ", ".join(sorted(set(missing)))) if missing \
+        else ok("installer", "every built component has an install path")
 
 
 def check_plymouth():
@@ -204,8 +242,8 @@ def check_contrast():
 
 
 CHECKS = {"python": check_python, "shell": check_shell, "qml": check_qml, "svg": check_svg,
-          "json": check_json, "packages": check_packages, "plymouth": check_plymouth,
-          "contrast": check_contrast}
+          "json": check_json, "packages": check_packages, "installer": check_installer,
+          "plymouth": check_plymouth, "contrast": check_contrast}
 
 if __name__ == "__main__":
     wanted = sys.argv[1:] or list(CHECKS)
