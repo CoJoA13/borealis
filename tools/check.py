@@ -37,7 +37,8 @@ def skip(name, why):
 
 
 def check_python():
-    files = [os.path.join(HERE, "build.py")] + glob.glob(os.path.join(HERE, "src", "*.py")) \
+    files = [os.path.join(HERE, "build.py")] \
+        + glob.glob(os.path.join(HERE, "src", "**", "*.py"), recursive=True) \
         + glob.glob(os.path.join(HERE, "tools", "*.py"))
     errs = []
     for f in files:
@@ -185,12 +186,12 @@ def check_installer():
     # the categories install.sh walks, plus what it copies by name
     cats = re.search(r"CATEGORIES=\((.*?)\)", text, re.S)
     known = set(cats.group(1).split()) if cats else set()
-    handled = {"gtk", "terminal", "applications", "firefox",       # explicit blocks
+    handled = {"gtk", "terminal", "applications", "firefox", "systemd",   # explicit blocks
                "plymouth", "grub"}                                 # install-system.sh
     missing = []
     for entry in sorted(os.listdir(SHARE)):
         path = os.path.join(SHARE, entry)
-        if not os.path.isdir(path) or entry in handled or entry.endswith("-tweaks"):
+        if not os.path.isdir(path) or entry in handled or entry.endswith(("-tweaks", "-dock")):
             continue
         if entry in known:
             continue

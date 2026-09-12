@@ -33,6 +33,9 @@ IDS = {
     "sounds": SLUG, "live": f"org.{SLUG.lower()}.aurora", "plymouth": SLUG.lower(),
     "kate_dark": f"{SLUG.lower()}dark", "kate_light": f"{SLUG.lower()}light",
     "dock": f"org.{SLUG.lower()}.dock", "quicksettings": f"org.{SLUG.lower()}.quicksettings",
+    # the standalone dock: app id, D-Bus name, KWin bridge script, command name
+    "dockapp": f"org.{SLUG.lower()}.dockapp", "dockbus": f"org.{SLUG.lower()}.Dock",
+    "dockbridge": f"{SLUG.lower()}-dockbridge", "dockexe": f"{SLUG.lower()}-dock",
     "logo": SLUG.lower(),
 }
 

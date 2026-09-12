@@ -27,6 +27,7 @@ Categories=Settings;DesktopSettings;Qt;KDE;
 Keywords=theme;colour;color;accent;wallpaper;aurora;{NAME};
 StartupNotify=true
 X-KDE-StartupNotify=true
+X-Borealis-App={SLUG.lower()}-tweaks
 """
 
 

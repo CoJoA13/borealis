@@ -106,6 +106,25 @@ for item in "${ITEMS[@]}"; do
             echo "${item##*/} is the active Global Theme — switch to another one first." >&2; exit 1; }
     esac
 done
+# the standalone dock: stop it and forget its unit, KWin bridge and command
+for unit in "$CONF"/systemd/user/*-dock.service; do
+    [ -f "$unit" ] && grep -q "Installed by the Borealis theme" "$unit" || continue
+    systemctl --user disable --now "$(basename "$unit")" >/dev/null 2>&1 || true
+    rm -f "$unit"
+    systemctl --user daemon-reload 2>/dev/null || true
+    echo "  - ~/.config/systemd/user/$(basename "$unit")"
+done
+for script in "$DEST"/kwin/scripts/*-dockbridge; do
+    [ -d "$script" ] || continue
+    kwriteconfig6 --file kwinrc --group Plugins --key "$(basename "$script")Enabled" --delete 2>/dev/null || true
+    qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "$(basename "$script")" >/dev/null 2>&1 || true
+done
+for link in "$HOME"/.local/bin/*-dock; do
+    [ -L "$link" ] || continue
+    case "$(readlink "$link")" in
+        "$DEST"/*-dock/main.py) rm -f "$link"; echo "  - ~/.local/bin/$(basename "$link")" ;;
+    esac
+done
 for item in "${ITEMS[@]}"; do
     [ -n "$item" ] || continue
     if [ -e "$DEST/$item" ]; then rm -rf "${DEST:?}/$item"; echo "  - $item"; fi

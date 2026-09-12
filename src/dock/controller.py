@@ -1,0 +1,374 @@
+"""What the QML sees as `dock`: the model, the settings, and every action."""
+import os
+import shutil
+
+from PySide6.QtCore import (Property, QFileSystemWatcher, QObject, QProcess, QRectF, QTimer,
+                            QUrl, Signal, Slot)
+from PySide6.QtGui import QRegion
+
+import effects
+import ids
+
+
+def _data_home():
+    return os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+
+
+class Controller(QObject):
+    screensChanged = Signal()
+    trashChanged = Signal()
+    windowsRevisionChanged = Signal()
+    menuOpenChanged = Signal()
+    bridgeAliveChanged = Signal()
+    menuRequested = Signal("QVariantList", int, QObject, float, float, float, float, str)
+    testMenuRequested = Signal(int)
+
+    def __init__(self, app, settings, apps, bridge, model, parent=None):
+        super().__init__(parent)
+        self.app, self.apps, self.bridge = app, apps, bridge
+        self._settings_obj, self._model_obj = settings, model
+        self._revision = 0
+        self._menu_open = False
+        self._last_menu = None
+        bridge.windowsChanged.connect(self._windows_changed)
+        bridge.aliveChanged.connect(self.bridgeAliveChanged)
+        settings.changed.connect(self._settings_changed)
+        for sig in (app.screenAdded, app.screenRemoved, app.primaryScreenChanged):
+            sig.connect(lambda *_: self.screensChanged.emit())
+        self._layout = self._layout_key()
+        try:
+            self._pointer = float(os.environ.get("BOREALIS_DOCK_POINTER", "-1"))
+        except ValueError:
+            self._pointer = -1.0
+        # trash
+        self._trash_full = False
+        self._trash_watch = QFileSystemWatcher(self)
+        self._trash_watch.directoryChanged.connect(lambda *_: self._check_trash())
+        self._check_trash()
+        # surfaces: masks and blur, coalesced to one update per frame
+        self._pending = {}
+        self._regions = {}
+        self._flush = QTimer(self, singleShot=True, interval=16)
+        self._flush.timeout.connect(self._apply_surfaces)
+
+    # --- state for QML ------------------------------------------------------
+    def _get_model(self):
+        return self._model_obj
+
+    def _get_settings(self):
+        return self._settings_obj
+
+    model = Property(QObject, _get_model, constant=True)
+    settings = Property(QObject, _get_settings, constant=True)
+
+    def _layout_key(self):
+        return (self.settings.get("position"), self.settings.get("screen"))
+
+    def _settings_changed(self):
+        key = self._layout_key()
+        if key != self._layout:
+            self._layout = key
+            self.screensChanged.emit()          # new surfaces for a new edge or screen
+
+    @Property("QVariantList", notify=screensChanged)
+    def screens(self):
+        if self.settings.get("screen") == "all":
+            return list(self.app.screens())
+        primary = self.app.primaryScreen()
+        return [primary] if primary else []
+
+    @Property(bool, notify=bridgeAliveChanged)
+    def bridgeAlive(self):
+        return self.bridge.alive
+
+    @Property(int, notify=windowsRevisionChanged)
+    def windowsRevision(self):
+        return self._revision
+
+    def _windows_changed(self):
+        self._revision += 1
+        self.windowsRevisionChanged.emit()
+
+    @Property(float, constant=True)
+    def pointerOverride(self):
+        return self._pointer
+
+    def _get_menu_open(self):
+        return self._menu_open
+
+    def _set_menu_open(self, value):
+        if bool(value) != self._menu_open:
+            self._menu_open = bool(value)
+            self.menuOpenChanged.emit()
+
+    menuOpen = Property(bool, _get_menu_open, _set_menu_open, notify=menuOpenChanged)
+
+    # --- trash --------------------------------------------------------------
+    def _check_trash(self):
+        files = os.path.join(_data_home(), "Trash", "files")
+        for path in (files, os.path.dirname(files), _data_home()):
+            if os.path.isdir(path) and path not in self._trash_watch.directories():
+                self._trash_watch.addPath(path)
+        try:
+            full = any(True for _ in os.scandir(files))
+        except OSError:
+            full = False
+        if full != self._trash_full:
+            self._trash_full = full
+            self.trashChanged.emit()
+
+    @Property(bool, notify=trashChanged)
+    def trashFull(self):
+        return self._trash_full
+
+    # --- clicks -------------------------------------------------------------
+    def _launch(self, item, urls=()):
+        if item and item.get("hasEntry") and self.apps.launch(item["appId"], urls=urls):
+            self.model.set_launching(item["appId"])
+
+    @Slot(int)
+    def click(self, row):
+        it = self.model.item(row)
+        if not it:
+            return
+        if it["kind"] == "trash":
+            return self.openTrash()
+        if it["kind"] != "app":
+            return
+        windows = it["windows"]
+        if not windows:
+            return self._launch(it)
+        active = [w for w in windows if w.get("active")]
+        if not active:
+            # bring the app forward: its most recently used window
+            return self.bridge.send("activate", id=windows[-1]["id"])
+        if len(windows) == 1 or self.settings.get("clickAction") == "minimize":
+            for w in windows:
+                if not w.get("minimized"):
+                    self.bridge.send("minimize", id=w["id"])
+            return
+        # several windows and one in front: step to the one used longest ago
+        self.bridge.send("activate", id=windows[0]["id"])
+
+    @Slot(int)
+    def middleClick(self, row):
+        it = self.model.item(row)
+        if it and it["kind"] == "app":
+            self._launch(it)
+
+    @Slot(int, int)
+    def scroll(self, row, direction):
+        it = self.model.item(row)
+        if not it or it["kind"] != "app" or not it["windows"]:
+            return
+        windows = it["windows"]
+        pick = windows[0] if direction > 0 else windows[-2 if len(windows) > 1 else -1]
+        self.bridge.send("activate", id=pick["id"])
+
+    # --- pinning and dragging -----------------------------------------------
+    def _save_pins(self, entry_ids):
+        specs = dict((i, s) for s, i in self.model.pins)
+        self.settings.set("pinned", [specs.get(i, i) for i in entry_ids])
+
+    def pin_app(self, entry_id, at=None):
+        order = [i for _s, i in self.model.pins if i != entry_id]
+        order.insert(len(order) if at is None else max(0, min(at, len(order))), entry_id)
+        self._save_pins(order)
+
+    @Slot(int, int, result=int)
+    def moveItem(self, from_row, to_row):
+        """Live reordering while an icon is dragged; returns its new row."""
+        it = self.model.item(from_row)
+        if not it or it["kind"] != "app" or not it["hasEntry"]:
+            return from_row
+        order = list(self.model._preview if self.model._preview is not None
+                     else [i for _s, i in self.model.pins])
+        if it["appId"] in order:
+            order.remove(it["appId"])
+        order.insert(max(0, min(to_row, len(order))), it["appId"])
+        self.model.preview_order(order)
+        return next((r for r, x in enumerate(self.model.items) if x.get("appId") == it["appId"]), from_row)
+
+    @Slot()
+    def commitOrder(self):
+        order = self.model.end_preview()
+        if order is not None:
+            self._save_pins(order)
+        else:
+            self.model.rebuild()
+
+    @Slot(int)
+    def unpin(self, row):
+        it = self.model.item(row)
+        self.model.end_preview()
+        if it and it["kind"] == "app":
+            self._save_pins([i for _s, i in self.model.pins if i != it["appId"]])
+
+    @Slot(int, "QVariantList")
+    def dropUrls(self, row, urls):
+        urls = [u.toString() if isinstance(u, QUrl) else str(u) for u in urls]
+        entries = [u for u in urls if u.endswith(".desktop") or u.startswith("applications:")]
+        it = self.model.item(row)
+        if it and it["kind"] == "trash":
+            self.trashUrls(urls)
+        elif it and it["kind"] == "app" and not entries:
+            self._launch(it, urls)
+        else:
+            pinned_rows = sum(1 for x in self.model.items if x.get("pinned"))
+            for u in entries:
+                entry_id = self.apps.resolve(u)
+                if self.apps.get(entry_id):
+                    self.pin_app(entry_id, at=min(row, pinned_rows) if row >= 0 else None)
+
+    # --- menus --------------------------------------------------------------
+    @Slot(QObject, result=QRectF)
+    def screenRect(self, window):
+        screen = window.screen() if hasattr(window, "screen") else None
+        return QRectF(screen.geometry()) if screen else QRectF()
+
+    @Slot(int, QObject, float, float, float, float, str)
+    def requestMenu(self, row, window, x, y, w, h, edge):
+        screen = window.screen() if hasattr(window, "screen") else self.app.primaryScreen()
+        self._last_menu = (row, screen, x, y, w, h, edge)
+        self.menuRequested.emit(self._menu_for(row), row, screen, x, y, w, h, edge)
+
+    def _menu_for(self, row):
+        it = self.model.item(row)
+        if it is None or it["kind"] == "divider":
+            zoom = self.settings.get("zoom")
+            return [
+                {"type": "command", "key": "hide-toggle", "icon": "view-visible",
+                 "text": "Turn Hiding On" if self.settings.get("hide") == "always" else "Turn Hiding Off"},
+                {"type": "command", "key": "magnify-toggle", "icon": "zoom-in",
+                 "text": "Turn Magnification Off" if zoom > 1 else "Turn Magnification On"},
+                {"type": "separator"},
+                {"type": "command", "key": "settings", "icon": "configure", "text": "Dock Settings…"},
+            ]
+        if it["kind"] == "trash":
+            return [
+                {"type": "command", "key": "trash-open", "icon": "document-open-folder", "text": "Open"},
+                {"type": "separator"},
+                {"type": "command", "key": "trash-empty", "icon": "trash-empty", "text": "Empty Trash…",
+                 "enabled": self._trash_full},
+            ]
+        entries = []
+        if it["windows"]:
+            for w in reversed(it["windows"]):
+                entries.append({"type": "window", "key": "window:" + w["id"],
+                                "text": w.get("caption") or it["name"], "check": bool(w.get("active")),
+                                "dim": bool(w.get("minimized"))})
+            entries.append({"type": "separator"})
+        entry = self.apps.get(it["appId"])
+        if entry and entry.actions:
+            for a in entry.actions:
+                entries.append({"type": "command", "key": "action:" + a["id"], "text": a["name"],
+                                "icon": a["icon"]})
+            entries.append({"type": "separator"})
+        if entry:
+            entries.append({"type": "command", "key": "new", "icon": "window-new", "text": "New Window"})
+            entries.append({"type": "command", "key": "unpin" if it["pinned"] else "pin",
+                            "icon": "window-unpin" if it["pinned"] else "window-pin",
+                            "text": "Remove from Dock" if it["pinned"] else "Keep in Dock"})
+        if it["windows"]:
+            entries.append({"type": "command", "key": "quit", "icon": "application-exit",
+                            "text": "Quit" if entry else "Close"})
+        return entries
+
+    @Slot(int, str)
+    def menuTriggered(self, row, key):
+        it = self.model.item(row)
+        if key == "settings":
+            self.openSettings()
+        elif key == "hide-toggle":
+            self.settings.set("hide", "dodge" if self.settings.get("hide") == "always" else "always")
+        elif key == "magnify-toggle":
+            zoom = self.settings.get("zoom")
+            self.settings.update({"zoom": 1.0, "zoomLast": zoom} if zoom > 1
+                                 else {"zoom": self.settings.get("zoomLast")})
+        elif key == "trash-open":
+            self.openTrash()
+        elif key == "trash-empty" and self._last_menu:
+            _row, screen, x, y, w, h, edge = self._last_menu
+            confirm = [{"type": "header", "text": "Erase the items in the Trash for good?"},
+                       {"type": "command", "key": "trash-empty-confirm", "icon": "trash-empty",
+                        "text": "Empty Trash"},
+                       {"type": "command", "key": "cancel", "text": "Cancel"}]
+            QTimer.singleShot(0, lambda: self.menuRequested.emit(confirm, row, screen, x, y, w, h, edge))
+        elif key == "trash-empty-confirm":
+            self.emptyTrash()
+        elif it and it["kind"] == "app":
+            if key.startswith("window:"):
+                self.bridge.send("activate", id=key[len("window:"):])
+            elif key.startswith("action:"):
+                self.apps.launch(it["appId"], action=key[len("action:"):])
+            elif key == "new":
+                self._launch(it)
+            elif key == "pin":
+                self.pin_app(it["appId"])
+            elif key == "unpin":
+                self._save_pins([i for _s, i in self.model.pins if i != it["appId"]])
+            elif key == "quit":
+                for w in it["windows"]:
+                    self.bridge.send("close", id=w["id"])
+
+    # --- trash and settings actions -----------------------------------------
+    @Slot()
+    def openTrash(self):
+        QProcess.startDetached("kioclient", ["exec", "trash:/"])
+
+    def emptyTrash(self):
+        if shutil.which("ktrash6"):
+            QProcess.startDetached("ktrash6", ["--empty"])
+        else:
+            QProcess.startDetached("gio", ["trash", "--empty"])
+
+    def trashUrls(self, urls):
+        if urls:
+            QProcess.startDetached("kioclient", ["move"] + list(urls) + ["trash:/"])
+
+    @Slot()
+    def openSettings(self):
+        if not self.apps.launch(ids.TWEAKS_ID):
+            print("dock: Borealis Tweaks isn't installed", flush=True)
+
+    # --- where windows are (for hiding) --------------------------------------
+    @Slot(str, float, float, float, float, result=bool)
+    def overlaps(self, screen, x, y, w, h):
+        for win in self.bridge.windows:
+            if win.get("minimized") or not win.get("here", True):
+                continue
+            if screen and win.get("output") and win["output"] != screen:
+                continue
+            gx, gy, gw, gh = (list(win.get("geometry") or []) + [0, 0, 0, 0])[:4]
+            if gx < x + w and x < gx + gw and gy < y + h and y < gy + gh:
+                return True
+        return False
+
+    @Slot(str, result=bool)
+    def fullscreenOn(self, screen):
+        return any(w.get("fullScreen") and w.get("active") and not w.get("minimized")
+                   and (not screen or w.get("output") in ("", screen)) for w in self.bridge.windows)
+
+    # --- input region and blur ----------------------------------------------
+    @Slot(QObject, "QVariantList", QRectF, float)
+    def updateSurface(self, window, rects, blur, radius):
+        self._pending[id(window)] = (window, rects, blur, radius)
+        if not self._flush.isActive():
+            self._flush.start()
+
+    def _apply_surfaces(self):
+        pending, self._pending = self._pending, {}
+        for key, (window, rects, blur, radius) in pending.items():
+            mask = QRegion()
+            for r in rects:
+                rect = r if isinstance(r, QRectF) else QRectF(r)
+                if rect.width() > 0 and rect.height() > 0:
+                    mask = mask.united(QRegion(rect.toAlignedRect()))
+            if mask != window.mask():
+                window.setMask(mask)           # empty: the whole surface takes input
+            region = (effects.rounded_region(blur.x(), blur.y(), blur.width(), blur.height(), radius)
+                      if radius >= 0 and blur.width() > 0 and blur.height() > 0 else QRegion())
+            if region != self._regions.get(key):
+                self._regions[key] = effects.set_blur(window, region) or region
+            # both only apply with a commit: make sure a frame follows
+            window.setProperty("commitTick", int(window.property("commitTick") or 0) + 1)

@@ -155,28 +155,31 @@ bar.addWidget("org.kde.plasma.panelspacer");
 bar.addWidget("@QUICK@");
 bar.addWidget("org.kde.plasma.systemtray");
 
-var dock = new Panel;
-dock.location = "bottom";
-// tall enough that a magnified icon still fits inside the panel
-dock.height = 2 * Math.ceil(gridUnit * 5.3 / 2);
-dock.floating = true;
-dock.lengthMode = "fit";
-dock.alignment = "center";
-dock.hiding = "dodgewindows";
-dock.opacity = "translucent";
+// the standalone Borealis Dock replaces the panel dock when it is installed
+if (!applicationExists("@DOCKEXE@")) {
+    var dock = new Panel;
+    dock.location = "bottom";
+    // tall enough that a magnified icon still fits inside the panel
+    dock.height = 2 * Math.ceil(gridUnit * 5.3 / 2);
+    dock.floating = true;
+    dock.lengthMode = "fit";
+    dock.alignment = "center";
+    dock.hiding = "dodgewindows";
+    dock.opacity = "translucent";
 
-var tasks = dock.addWidget("@DOCK@");
-tasks.currentConfigGroup = ["General"];
-tasks.writeConfig("launchers", [
-    "applications:org.kde.dolphin.desktop",
-    "preferred://browser",
-    "applications:org.kde.konsole.desktop",
-    "applications:org.kde.kwrite.desktop",
-    "applications:org.kde.discover.desktop",
-    "applications:systemsettings.desktop"
-]);
-tasks.writeConfig("iconSize", 48);
-tasks.writeConfig("magnification", 130);
+    var tasks = dock.addWidget("@DOCK@");
+    tasks.currentConfigGroup = ["General"];
+    tasks.writeConfig("launchers", [
+        "applications:org.kde.dolphin.desktop",
+        "preferred://browser",
+        "applications:org.kde.konsole.desktop",
+        "applications:org.kde.kwrite.desktop",
+        "applications:org.kde.discover.desktop",
+        "applications:systemsettings.desktop"
+    ]);
+    tasks.writeConfig("iconSize", 48);
+    tasks.writeConfig("magnification", 130);
+}
 """
 
 LAYOUT_DEFAULTS = """[kwinrc][org.kde.kdecoration2]
@@ -254,7 +257,8 @@ def switcher(dest):
 
 def build(out_root, night, dawn, layout_js=None, previews=None):
     layout_js = ((layout_js or LAYOUT_JS).replace("@DOCK@", IDS["dock"])
-                 .replace("@QUICK@", IDS["quicksettings"]))
+                 .replace("@QUICK@", IDS["quicksettings"])
+                 .replace("@DOCKEXE@", IDS["dockexe"]))
     base = os.path.join(out_root, "plasma", "look-and-feel")
     made = []
     for vid, pkg in PACKAGES.items():

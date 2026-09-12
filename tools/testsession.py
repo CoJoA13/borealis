@@ -230,6 +230,103 @@ if [ "$EXTRAS" = 1 ]; then
     stop "$KSPID"
     sleep 1
 fi
+if [ "$SDOCK" = 1 ]; then
+    # the standalone dock; its KWin bridge is enabled in this sandbox's kwinrc
+    sd() { qdbus-qt6 "$SDOCK_BUS" /Dock "${SDOCK_BUS}1.$1" "${@:2}" 2>&1; }
+    layout() { sd Layout > "$SANDBOX/sdock-$1.json"; }
+    # resting centre of a row along the dock: at_of <layout> <screen length> <app id or kind>
+    at_of() {
+        python3 -c 'import json, sys
+d = json.load(open(sys.argv[1])); start = (int(sys.argv[2]) - d["length"]) / 2
+rows = [i for i, r in enumerate(d["rows"]) if sys.argv[3] in (r["appId"], r["kind"])]
+print(int(start + d["offsets"][rows[0]] + d["iconSize"] / 2) if rows else -1)' "$SANDBOX/sdock-$1.json" "$2" "$3"
+    }
+    settle() {      # change the dock's settings file; the dock follows it live
+        python3 -c 'import json, os, sys
+p = os.path.join(os.environ["XDG_CONFIG_HOME"], sys.argv[1], "dock.json")
+d = json.load(open(p)) if os.path.exists(p) else {}
+d.update(json.loads(sys.argv[2]))
+os.makedirs(os.path.dirname(p), exist_ok=True)
+json.dump(d, open(p + ".tmp", "w")); os.replace(p + ".tmp", p)' "$SDOCK_SLUG" "$1"
+    }
+    tap() { python3 "$SANDBOX/tap_key.py" "$1" >> "$SANDBOX/sdock-input.log" 2>&1; }
+    dolphin --new-window "$HOME" >/dev/null 2>&1 &
+    S1=$!
+    konsole --profile "$PROFILE" -e bash --rcfile "$SANDBOX/demorc" >/dev/null 2>&1 &
+    S2=$!
+    sleep 4
+    "$XDG_DATA_HOME"/*-dock/main.py > "$SANDBOX/sdock.log" 2>&1 &
+    SDPID=$!
+    sleep 7
+    layout rest
+    shot sdock-rest
+    Y=$(( SCREEN_H - 40 ))
+    if [ -n "$DISPLAY" ] && [ "$DISPLAY" != "$REAL_DISPLAY" ]; then
+        # hover and click the front app (minimises it)
+        DX=$(at_of rest "$SCREEN_W" org.kde.dolphin)
+        tap "move:$(( DX - 40 )),$Y"; sleep 0.3
+        tap "move:$DX,$Y"; sleep 1
+        shot sdock-hover
+        tap "click:$DX,$Y"; sleep 2
+        layout clicked
+        shot sdock-clicked
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 1
+        sd OpenMenu 0 >/dev/null; sleep 2
+        shot sdock-menu
+        tap "click:300,400"; sleep 1
+        # launch a pinned app: it bounces until its window shows up
+        KX=$(at_of rest "$SCREEN_W" org.kde.kwrite)
+        tap "click:$KX,$Y"; sleep 0.5
+        layout launching
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 0.3
+        shot sdock-launching
+        sleep 5
+        layout launched
+        # drag the second pinned app past the third
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 0.5
+        layout before-drag
+        FX=$(at_of before-drag "$SCREEN_W" org.mozilla.firefox)
+        CX=$(at_of before-drag "$SCREEN_W" org.kde.konsole)
+        tap "down:$FX,$Y"; sleep 0.1
+        for step in 12 30 60; do tap "move:$(( FX + step )),$Y"; sleep 0.08; done
+        tap "move:$CX,$Y"; sleep 0.3
+        tap "move:$(( CX + 10 )),$Y"; sleep 0.3
+        tap "up:$(( CX + 10 )),$Y"; sleep 1
+        layout reordered
+        # drag one off the dock: it unpins (and stays as an open app while it has a window)
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 0.5
+        layout before-unpin
+        WX=$(at_of before-unpin "$SCREEN_W" org.kde.kwrite)
+        tap "down:$WX,$Y"; sleep 0.1
+        for up in 15 40 90 160 230; do tap "move:$WX,$(( Y - up ))"; sleep 0.08; done
+        sleep 0.4
+        shot sdock-removing
+        tap "up:$WX,$(( Y - 230 ))"; sleep 1.5
+        layout unpinned
+        shot sdock-unpinned
+        # auto-hide: gone when the pointer leaves, back at the screen edge
+        settle '{"hide": "auto", "hideDelay": 300}'
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 2
+        shot sdock-autohidden
+        tap "move:$(( SCREEN_W / 2 )),$(( SCREEN_H - 1 ))"; sleep 1.2
+        shot sdock-revealed
+        # the left edge
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 0.3
+        settle '{"hide": "always", "position": "left"}'
+        sleep 3
+        layout left
+        shot sdock-left
+        LY=$(at_of left "$SCREEN_H" org.kde.dolphin)
+        tap "move:40,$(( LY - 40 ))"; sleep 0.3
+        tap "move:40,$LY"; sleep 1
+        shot sdock-left-hover
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 0.5
+    fi
+    sd Quit >/dev/null
+    sleep 1
+    stop "$SDPID" "$S1" "$S2"
+    sleep 1
+fi
 stop "$SHELLPID"
 sleep 1
 """
@@ -376,6 +473,12 @@ if arg.startswith("move:"):                  # move:X,Y — hover, no click
     cx, cy = (int(v) for v in arg.split(":")[1].split(","))
     t.XTestFakeMotionEvent(d, 0, cx, cy, 0); x.XFlush(d)
     print("moved to", cx, cy, "on", disp)
+elif arg.startswith(("down:", "up:")):          # down:X,Y / up:X,Y — press or release there (drags)
+    cx, cy = (int(v) for v in arg.split(":")[1].split(","))
+    t.XTestFakeMotionEvent(d, 0, cx, cy, 0); x.XFlush(d)
+    time.sleep(0.05)
+    t.XTestFakeButtonEvent(d, 1, 1 if arg.startswith("down:") else 0, 0); x.XFlush(d)
+    print(arg.split(":")[0], cx, cy, "on", disp)
 elif arg.startswith("click:"):                 # click:X,Y — focus a window, then wake it
     cx, cy = (int(v) for v in arg.split(":")[1].split(","))
     t.XTestFakeMotionEvent(d, 0, cx, cy, 0); x.XFlush(d)
@@ -450,6 +553,8 @@ def main():
     ap.add_argument("--firefox", action="store_true", help="also open Firefox with the Borealis chrome")
     ap.add_argument("--dock", action="store_true", help="swap the panel's task manager for the Borealis dock")
     ap.add_argument("--quicksettings", action="store_true", help="open the Quick Settings widget in a window")
+    ap.add_argument("--standalone-dock", action="store_true",
+                    help="run the standalone dock with its KWin bridge (hover, click, menu)")
     ap.add_argument("--remix", metavar="HEX", default="",
                     help="also remix onto this accent through the app's backend, e.g. '#4fbf6a'")
     args = ap.parse_args()
@@ -489,10 +594,31 @@ def main():
         shutil.copy(css, os.path.join(sandbox, "config", "gtk-4.0", name))
         with open(os.path.join(sandbox, "config", "gtk-4.0", "gtk.css"), "w") as f:
             f.write(f"@import 'colors.css';\n@import '{name}';\n")
-    if args.switcher:
+    kwinrc = ""
+    if args.switcher or args.standalone_dock:
         # sandbox only: let the nested Xwayland's XTest input through unprompted
+        kwinrc += "[Xwayland]\nXwaylandEisNoPrompt=true\n\n"
+    sdock_bus = sdock_slug = ""
+    if args.standalone_dock:
+        import glob
+        import re
+        bridge = next(iter(glob.glob(os.path.join(SHARE, "kwin", "scripts", "*-dockbridge"))), "")
+        app = next(iter(glob.glob(os.path.join(data, "*-dock"))), "")
+        if not (bridge and app):
+            sys.exit("the standalone dock isn't built: ./build.py dock")
+        kwinrc += f"[Plugins]\n{os.path.basename(bridge)}Enabled=true\n"
+        ids_text = open(os.path.join(app, "ids.py")).read()
+        sdock_bus = re.search(r"^BUS = ['\"](.+)['\"]$", ids_text, re.M).group(1)
+        sdock_slug = re.search(r"^SLUG = ['\"](.+)['\"]$", ids_text, re.M).group(1)
+        # the layout script asks applicationExists() for the dock's command
+        os.symlink(os.path.join(app, "main.py"), os.path.join(fakebin, os.path.basename(app)))
+        # apps launched with files go through systemd-run: run them directly here
+        with open(os.path.join(fakebin, "systemd-run"), "w") as f:
+            f.write('#!/bin/sh\nwhile [ $# -gt 0 ] && [ "$1" != "--" ]; do shift; done\nshift\nexec "$@"\n')
+        os.chmod(os.path.join(fakebin, "systemd-run"), 0o755)
+    if kwinrc:
         with open(os.path.join(sandbox, "config", "kwinrc"), "w") as f:
-            f.write("[Xwayland]\nXwaylandEisNoPrompt=true\n")
+            f.write(kwinrc)
     if args.live:
         with open(os.path.join(sandbox, "config", "kscreenlockerrc"), "w") as f:
             f.write("[Greeter]\nWallpaperPlugin=org.borealis.aurora\n")
@@ -572,12 +698,14 @@ def main():
         "BOREALIS_PROJECT": HERE,
         "VARIANT": args.variant,
         "REAL_DISPLAY": os.environ.get("DISPLAY", ":0"),
+        "SDOCK": "1" if args.standalone_dock else "0", "SDOCK_BUS": sdock_bus, "SDOCK_SLUG": sdock_slug,
+        "SCREEN_W": w, "SCREEN_H": h,
     }
     cmd = ["timeout", "120", "dbus-run-session", "--",
            "kwin_wayland", "--virtual", "--no-lockscreen",
            "--width", w, "--height", h,
            "--socket", f"wayland-borealis-{os.getpid()}"]
-    if args.switcher or args.dock or not args.no_extras:
+    if args.switcher or args.dock or args.standalone_dock or not args.no_extras:
         cmd.append("--xwayland")      # only so XTest can reach the nested KWin
     cmd += ["--exit-with-session", script]
     with open(os.path.join(sandbox, "kwin.log"), "w") as log:

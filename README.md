@@ -45,7 +45,7 @@ Built for Fedora 44 / Plasma 6.7.
 | Boot splash | Borealis (Plymouth) | Same logo and aurora spinner from power-on |
 | Desktop layout | built into each Global Theme | Floating top bar (launcher, global menu, centered clock, tray) + floating dock |
 | Konsole / Kate | Borealis Dark / Light | Terminal schemes + profiles, editor themes |
-| Dock | **Borealis Dock** | Launchers and windows in one row, icons swelling under the pointer, running dots, its own trash |
+| Dock | **Borealis Dock** | A standalone macOS-style dock: icons swell *above* the shelf, running dots, pinned ┆ open ┆ trash, drag to reorder or pull off to unpin, three hide modes, any screen edge (`--dock`; a panel-widget version remains as the fallback) |
 | Quick Settings | **Borealis Quick Settings** | Wi-Fi, Bluetooth, Night Light, power profile, light/dark, animated wallpaper, brightness and volume in one popup |
 | Tweaks app | **Borealis Tweaks** | Switch variant, remix the palette onto any colour, toggle the animated aurora, undo |
 | Firefox | `borealis-userChrome.css` | Toolbars, tabs, address bar and menus in Borealis (`--firefox`) |
@@ -82,6 +82,8 @@ Or apply from the terminal — it backs up your settings first and prints the un
 | `--terminal` | bat, tmux, git, `ls`, fzf and prompt colors (adds one line to `~/.bashrc`) |
 | `--firefox` | Borealis chrome for Firefox (writes into your Firefox profile) |
 | `--panels` | put the dock and Quick Settings into the panels you already have |
+| `--dock` | switch to the standalone Borealis Dock (runs now and at login; your pins come along) |
+| `--dock-revert` | back to the panel dock |
 
 `--apply` also sets the Borealis wallpaper on the lock screen (Fedora otherwise
 pins its own) and switches to the Borealis sound theme.
@@ -168,19 +170,50 @@ Palette, radii and translucency live in `src/tokens.py`.
 
 ### The dock and Quick Settings
 
-The Borealis layout uses two widgets of its own. **Borealis Dock** merges pinned
-launchers and running windows into one row, magnifies icons under the pointer
-like a Mac dock, marks running apps with dots and keeps a trash at the end;
-right-click an icon to pin, unpin, open a new window or close it. **Borealis
-Quick Settings** sits in the top bar and opens a popup with Wi-Fi, Bluetooth,
-Night Light, the power profile, light/dark, the animated wallpaper, and
-brightness and volume sliders.
+**Borealis Dock** is its own small app rather than a panel widget, so nothing
+caps it: icons swell above the shelf the way a Mac dock's do, with the icon
+under the pointer staying put while its neighbours make room.
 
-Already have panels you like? `./install.sh --panels` drops both into them
-without touching anything else (it replaces the old task manager and trash).
-Icon size, magnification and spread are in the dock's own settings; the panel's
-height limits how far icons can grow, so the Borealis layout makes the dock
-taller than a stock panel.
+```bash
+./install.sh --dock          # start it, keep it at login, retire the panel dock
+./install.sh --dock-revert   # back to the panel dock
+```
+
+- Pinned apps, a divider, apps that are open but not pinned, another divider,
+  the trash. A dot marks running apps; the front app's dot takes the accent.
+- Click an app to bring it forward; click the front app to minimise it (or to
+  step through its windows); middle-click for a new window; scroll over an
+  icon to cycle windows. Launching apps bounce until their window appears.
+- Drag icons to reorder them, drag one off the dock to unpin it, drop an app
+  from the launcher onto the dock to pin it, drop files on an app to open them
+  with it, or on the trash to throw them away.
+- Right-click an icon for its windows, its own actions (a browser's "New
+  Private Window"), New Window, Keep in Dock / Remove from Dock and Quit;
+  right-click the shelf to turn hiding or magnification on and off.
+- Hide modes: always visible (windows keep clear of it), dodge windows, or
+  auto-hide; push the pointer against the screen edge to bring it back.
+  Bottom, left or right edge; primary screen, every screen, or the one with
+  the pointer.
+
+Settings live in `~/.config/borealis/dock.json` and apply the moment the file
+changes: `position`, `screen`, `iconSize`, `zoom`, `reach`, `spacing`,
+`padding`, `margin`, `radius`, `opacity`, `blur`, `hide`, `hideDelay`,
+`indicator`, `labels`, `bounce`, `divider`, `showTrash`, `animation`, `pinned`.
+
+How it fits together: KWin shares its window list only with plasmashell, so a
+tiny KWin script (the "Borealis Dock bridge", enabled by `--dock`) reports the
+open windows to the dock over D-Bus and carries out its window commands. The
+dock runs as a systemd user service (`systemctl --user status borealis-dock`)
+and needs PySide6 and layer-shell-qt (`sudo dnf install python3-pyside6
+layer-shell-qt`); `BOREALIS_DOCK_DEBUG=1` traces both halves.
+
+The panel widget version is still built: the Global Themes' layout uses it
+whenever the standalone dock isn't installed, and `./install.sh --panels`
+drops it (with Quick Settings) into panels you already have.
+
+**Borealis Quick Settings** sits in the top bar and opens a popup with Wi-Fi,
+Bluetooth, Night Light, the power profile, light/dark, the animated wallpaper,
+and brightness and volume sliders.
 
 ### Borealis Tweaks (the app)
 

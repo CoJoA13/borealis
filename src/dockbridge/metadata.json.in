@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "KWin/Script",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "@EMAIL@",
+                "Name": "@AUTHOR@"
+            }
+        ],
+        "Description": "Tells the @NAME@ Dock which windows are open and carries out its window commands",
+        "EnabledByDefault": false,
+        "Icon": "@LOGO@",
+        "Id": "@ID@",
+        "License": "GPL-3.0-or-later",
+        "Name": "@NAME@ Dock bridge",
+        "Version": "@VERSION@",
+        "Website": "https://github.com/CoJoA13/borealis"
+    },
+    "X-Plasma-API": "declarativescript"
+}

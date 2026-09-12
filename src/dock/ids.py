@@ -1,0 +1,12 @@
+"""Names the build fills in (gen_dock.py), so a remix runs its own dock beside
+this one. The defaults let the dock run straight from the source tree."""
+NAME = "Borealis"
+SLUG = "borealis"
+VERSION = "1.0"
+APP_ID = "org.borealis.dockapp"
+TWEAKS_ID = "org.borealis.tweaks"
+BUS = "org.borealis.Dock"
+PATH = "/Dock"
+INTERFACE = "org.borealis.Dock1"
+BRIDGE = "borealis-dockbridge"
+SHORTCUT = "Borealis Dock: sync"

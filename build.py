@@ -119,6 +119,11 @@ def step_firefox():
     gen_firefox.build(OUT)
 
 
+def step_dock():
+    import gen_dock
+    gen_dock.build(OUT)
+
+
 def step_tweaks():
     import gen_tweaks
     gen_tweaks.build(OUT)
@@ -151,6 +156,7 @@ STEPS = {
     "plasmoids": step_plasmoids,
     "grub": step_grub,
     "firefox": step_firefox,
+    "dock": step_dock,
     "tweaks": step_tweaks,
     "gtk": step_gtk,
     "lnf": step_lnf,
