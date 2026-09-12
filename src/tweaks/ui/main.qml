@@ -15,9 +15,9 @@ Kirigami.ApplicationWindow {
 
     title: qsTr("Borealis Tweaks")
     minimumWidth: Kirigami.Units.gridUnit * 34
-    minimumHeight: Kirigami.Units.gridUnit * 28
+    minimumHeight: Kirigami.Units.gridUnit * 30
     width: minimumWidth
-    height: Kirigami.Units.gridUnit * 33
+    height: Kirigami.Units.gridUnit * 42
 
     property string pendingAccent: backend.accent
     property string pendingName: backend.paletteName
@@ -169,6 +169,72 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 visible: backend.busy
                 indeterminate: true
+            }
+
+            Kirigami.Separator { Layout.fillWidth: true }
+
+            // ---------------------------------------------------- system ---
+            Kirigami.Heading { level: 3; text: qsTr("Beyond Plasma") }
+
+            Kirigami.FormLayout {
+                Layout.fillWidth: true
+
+                RowLayout {
+                    Kirigami.FormData.label: qsTr("Flatpak apps:")
+                    visible: backend.hasFlatpak
+                    QQC2.Label {
+                        text: backend.flatpakColors ? qsTr("Using the Borealis colours")
+                                                    : qsTr("Still Adwaita grey")
+                    }
+                    QQC2.Button {
+                        visible: !backend.flatpakColors
+                        text: qsTr("Let them read the colours")
+                        icon.name: "preferences-desktop-color"
+                        onClicked: backend.grantFlatpakColors()
+                    }
+                }
+
+                RowLayout {
+                    Kirigami.FormData.label: qsTr("Boot splash:")
+                    QQC2.Label {
+                        text: backend.bootSplash.length ? backend.bootSplash : qsTr("unknown")
+                    }
+                    QQC2.Button {
+                        visible: backend.hasProject && backend.bootSplash !== "borealis"
+                        enabled: !backend.busy
+                        text: qsTr("Install (asks for your password)")
+                        icon.name: "system-reboot"
+                        onClicked: backend.installSystemWide("--plymouth")
+                    }
+                }
+
+                RowLayout {
+                    Kirigami.FormData.label: qsTr("Login screen:")
+                    QQC2.Label {
+                        text: backend.systemWide ? qsTr("Theme is available to it")
+                                                 : qsTr("Theme is only in your home folder")
+                    }
+                    QQC2.Button {
+                        visible: backend.hasProject && !backend.systemWide
+                        enabled: !backend.busy
+                        text: qsTr("Copy system-wide")
+                        icon.name: "system-upgrade"
+                        onClicked: backend.installSystemWide("")
+                    }
+                    QQC2.Button {
+                        text: qsTr("Open settings…")
+                        icon.name: "preferences-system-login"
+                        onClicked: backend.launch("login")
+                    }
+                }
+            }
+
+            QQC2.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                opacity: 0.7
+                font: Kirigami.Theme.smallFont
+                text: qsTr("The login screen copies your look when you press “Apply Plasma Settings…” in its settings page; Plasma can't do that from here.")
             }
 
             Kirigami.Separator { Layout.fillWidth: true }

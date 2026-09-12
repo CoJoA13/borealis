@@ -141,6 +141,29 @@ class Backend(QObject):
         return any(p == live for p in self._wallpaper_plugins())
 
     @Property(bool, notify=changed)
+    def flatpakColors(self):
+        """True when Flatpak apps may read ~/.config/gtk-4.0."""
+        if not shutil.which("flatpak"):
+            return False
+        r = run(["flatpak", "override", "--user", "--show"])
+        return "xdg-config/gtk-4.0" in r.stdout
+
+    @Property(bool, constant=True)
+    def hasFlatpak(self):
+        return bool(shutil.which("flatpak"))
+
+    @Property(str, notify=changed)
+    def bootSplash(self):
+        r = run(["plymouth-set-default-theme"])
+        return r.stdout.strip() if r.returncode == 0 else ""
+
+    @Property(bool, notify=changed)
+    def systemWide(self):
+        """The login screen can only use themes installed outside $HOME."""
+        pkg = self._lnf()
+        return bool(pkg) and os.path.isdir(f"/usr/local/share/plasma/look-and-feel/{pkg}")
+
+    @Property(bool, notify=changed)
     def hasProject(self):
         return os.path.exists(os.path.join(PROJECT, "build.py"))
 
@@ -265,12 +288,29 @@ class Backend(QObject):
                     [os.path.join(PROJECT, "uninstall.sh"), "--restore", os.path.join(root, stamp)])],
                   "Restored. Some apps may need restarting.")
 
+    @Slot()
+    def grantFlatpakColors(self):
+        run(["flatpak", "override", "--user", "--filesystem=xdg-config/gtk-4.0:ro"])
+        self.changed.emit()
+
+    @Slot(str)
+    def installSystemWide(self, what):
+        """install-system.sh needs root: ask through polkit, in the background."""
+        script = os.path.join(PROJECT, "install-system.sh")
+        if not os.path.exists(script):
+            return self.finished.emit(False, "install-system.sh was not found.")
+        cmd = ["pkexec", script] + ([what] if what else [])
+        self._job([("pkexec install-system.sh " + what, cmd)],
+                  "Done — the boot splash appears at the next start."
+                  if what else "Copied system-wide; now use Login Screen › Apply Plasma Settings.")
+
     @Slot(str)
     def launch(self, what):
         cmds = {
             "globaltheme": ["systemsettings", "kcm_lookandfeel"],
             "wallpaper": ["plasma-open-settings", "kcm_wallpaper"],
             "colors": ["systemsettings", "kcm_colors"],
+            "login": ["systemsettings", "kcm_plasmalogin"],
         }
         cmd = cmds.get(what)
         if cmd and shutil.which(cmd[0]):
