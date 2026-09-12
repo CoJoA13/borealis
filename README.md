@@ -173,6 +173,10 @@ would fail contrast). Red, amber and green keep their meaning. The remix gets
 its own package names, so it installs next to the original and both show up in
 the Global Theme list. `--saturation 1.2` makes everything more vivid.
 
+## Links
+
+Source: <https://github.com/CoJoA13/borealis> · Store listing kit: [STORE.md](STORE.md)
+
 ## License
 
 GPL-3.0-or-later (see `LICENSE`). Artwork (wallpapers, logo, icons, cursors,
