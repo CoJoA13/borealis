@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="launchers" type="StringList">
+      <label>Pinned applications</label>
+      <default>applications:org.kde.dolphin.desktop,preferred://browser,applications:org.kde.konsole.desktop,applications:org.kde.kwrite.desktop,applications:systemsettings.desktop</default>
+    </entry>
+    <entry name="iconSize" type="Int">
+      <label>Resting icon size in pixels</label>
+      <default>48</default>
+    </entry>
+    <entry name="magnification" type="Int">
+      <label>How far an icon grows under the pointer, in percent</label>
+      <default>150</default>
+    </entry>
+    <entry name="reach" type="Int">
+      <label>How many icons either side follow the pointer</label>
+      <default>3</default>
+    </entry>
+    <entry name="showTrash" type="Bool">
+      <label>Show the trash at the end of the dock</label>
+      <default>true</default>
+    </entry>
+    <entry name="onlyCurrentDesktop" type="Bool">
+      <label>Only show windows from the current virtual desktop</label>
+      <default>false</default>
+    </entry>
+  </group>
+</kcfg>

@@ -22,6 +22,10 @@ Built for Fedora 44 / Plasma 6.7.
 
 ![The GRUB menu](docs/grub.jpg)
 
+| The dock | Quick Settings |
+|---|---|
+| ![Borealis Dock](docs/dock.jpg) | ![Borealis Quick Settings](docs/quicksettings.jpg) |
+
 ## What's inside
 
 | Component | Name(s) | Notes |
@@ -41,6 +45,8 @@ Built for Fedora 44 / Plasma 6.7.
 | Boot splash | Borealis (Plymouth) | Same logo and aurora spinner from power-on |
 | Desktop layout | built into each Global Theme | Floating top bar (launcher, global menu, centered clock, tray) + floating dock |
 | Konsole / Kate | Borealis Dark / Light | Terminal schemes + profiles, editor themes |
+| Dock | **Borealis Dock** | Launchers and windows in one row, icons swelling under the pointer, running dots, its own trash |
+| Quick Settings | **Borealis Quick Settings** | Wi-Fi, Bluetooth, Night Light, power profile, light/dark, animated wallpaper, brightness and volume in one popup |
 | Tweaks app | **Borealis Tweaks** | Switch variant, remix the palette onto any colour, toggle the animated aurora, undo |
 | Firefox | `borealis-userChrome.css` | Toolbars, tabs, address bar and menus in Borealis (`--firefox`) |
 | GRUB menu | Borealis | Aurora boot menu, so power-on to desktop is one look (`--grub`) |
@@ -75,6 +81,7 @@ Or apply from the terminal — it backs up your settings first and prints the un
 | `--flatpak` | same for Flatpak apps (implies `--gtk`; gives every Flatpak read-only access to `~/.config/gtk-4.0`) |
 | `--terminal` | bat, tmux, git, `ls`, fzf and prompt colors (adds one line to `~/.bashrc`) |
 | `--firefox` | Borealis chrome for Firefox (writes into your Firefox profile) |
+| `--panels` | put the dock and Quick Settings into the panels you already have |
 
 `--apply` also sets the Borealis wallpaper on the lock screen (Fedora otherwise
 pins its own) and switches to the Borealis sound theme.
@@ -158,6 +165,22 @@ With `make` installed, `make`, `make check`, `make test`, `make package` and
 `make apply` wrap the same scripts.
 
 Palette, radii and translucency live in `src/tokens.py`.
+
+### The dock and Quick Settings
+
+The Borealis layout uses two widgets of its own. **Borealis Dock** merges pinned
+launchers and running windows into one row, magnifies icons under the pointer
+like a Mac dock, marks running apps with dots and keeps a trash at the end;
+right-click an icon to pin, unpin, open a new window or close it. **Borealis
+Quick Settings** sits in the top bar and opens a popup with Wi-Fi, Bluetooth,
+Night Light, the power profile, light/dark, the animated wallpaper, and
+brightness and volume sliders.
+
+Already have panels you like? `./install.sh --panels` drops both into them
+without touching anything else (it replaces the old task manager and trash).
+Icon size, magnification and spread are in the dock's own settings; the panel's
+height limits how far icons can grow, so the Borealis layout makes the dock
+taller than a stock panel.
 
 ### Borealis Tweaks (the app)
 

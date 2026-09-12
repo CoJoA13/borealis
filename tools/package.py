@@ -49,6 +49,8 @@ ARCHIVES = {
     f"{SLUG}-firefox": ("Firefox", [f"firefox/{SLUG.lower()}"]),
     f"{SLUG}-grub": ("GRUB Themes", [f"grub/themes/{IDS['plymouth']}"]),
     f"{SLUG}-tweaks-app": ("Plasma Add-ons", [f"{SLUG.lower()}-tweaks"]),
+    f"{SLUG}-dock-widget": ("Plasma Widgets", [f"plasma/plasmoids/{IDS['dock']}"]),
+    f"{SLUG}-quicksettings-widget": ("Plasma Widgets", [f"plasma/plasmoids/{IDS['quicksettings']}"]),
 }
 
 

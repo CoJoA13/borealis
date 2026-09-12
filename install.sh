@@ -13,6 +13,8 @@
 #   --gtk       Borealis colors for GTK4/libadwaita apps
 #   --terminal  Borealis for bat, tmux, git, ls, fzf and the bash prompt
 #   --firefox   Borealis for Firefox's own window (userChrome.css)
+#   --panels    put the Borealis dock and Quick Settings into the panels you
+#               already have (no layout reset)
 #   --from DIR  install a build from elsewhere (e.g. a remix built with
 #               ./build.py --accent … --name "Borealis Ember" --out DIR)
 #   --flatpak   ...for Flatpak apps too (implies --gtk; lets every Flatpak app
@@ -27,7 +29,7 @@ SRC="${BOREALIS_SRC:-$HERE/build/share}"
 DEST="${XDG_DATA_HOME:-$HOME/.local/share}"
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}"
 
-APPLY=""; LAYOUT=0; AUTO=0; KONSOLE=0; LIVE=0; GTK=0; FLATPAK=0; TERMINAL=0; FIREFOX=0
+APPLY=""; LAYOUT=0; AUTO=0; KONSOLE=0; LIVE=0; GTK=0; FLATPAK=0; TERMINAL=0; FIREFOX=0; PANELS=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --apply) APPLY="${2:-}"; shift 2 ;;
@@ -39,8 +41,9 @@ while [ $# -gt 0 ]; do
         --flatpak) GTK=1; FLATPAK=1; shift ;;
         --terminal) TERMINAL=1; shift ;;
         --firefox) FIREFOX=1; shift ;;
+        --panels) PANELS=1; shift ;;
         --from) SRC="${2:-}"; shift 2 ;;
-        -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -112,6 +115,36 @@ sys.exit(1)
 PYEOF
 }
 
+panels_update() {
+        DOCK_ID="$(basename "$(ls -d "$SRC"/plasma/plasmoids/*.dock 2>/dev/null | head -1)")"
+        QUICK_ID="$(basename "$(ls -d "$SRC"/plasma/plasmoids/*.quicksettings 2>/dev/null | head -1)")"
+        qdbus-qt6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
+    var ps = panels();
+    for (var i = 0; i < ps.length; i++) {
+        var p = ps[i];
+        var ids = p.widgetIds;
+        var types = [];
+        for (var j = 0; j < ids.length; j++) { types.push(String(p.widgetById(ids[j]).type)); }
+        if (String(p.location) === 'bottom' && types.indexOf('$DOCK_ID') < 0) {
+            for (var j = 0; j < ids.length; j++) {
+                var w = p.widgetById(ids[j]);
+                var t = String(w.type);
+                if (t.indexOf('icontasks') >= 0 || t.indexOf('taskmanager') >= 0
+                    || t.indexOf('plasma.trash') >= 0 || t.indexOf('marginsseparator') >= 0) { w.remove(); }
+            }
+            p.height = 2 * Math.ceil(gridUnit * 4.4 / 2);   // room for the magnified icons
+            var dock = p.addWidget('$DOCK_ID');
+            dock.currentConfigGroup = ['General'];
+            dock.writeConfig('iconSize', 48);
+            dock.writeConfig('magnification', 150);
+        } else if (String(p.location) === 'top' && types.indexOf('$QUICK_ID') < 0) {
+            p.addWidget('$QUICK_ID');
+        }
+    }
+    " >/dev/null 2>&1 && echo "  panels updated (drag the widgets where you want them in Edit Mode)" \
+          || echo "  (couldn't reach plasmashell; add the widgets from the panel's Add Widgets menu)"
+}
+
 meta_name() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["KPlugin"]["Name"])' "$1" 2>/dev/null; }
 TITLE_DARK="$(meta_name "$SRC/plasma/look-and-feel/$THEME_DARK/metadata.json")"
 TITLE_LIGHT="$(meta_name "$SRC/plasma/look-and-feel/$THEME_LIGHT/metadata.json")"
@@ -154,6 +187,12 @@ CACHE="${XDG_CACHE_HOME:-$HOME/.cache}"
 rm -f "$CACHE"/plasma_theme_"$THEME_NAME"*.kcache "$CACHE"/ksvg-elements 2>/dev/null || true
 command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 >/dev/null 2>&1 || true
 
+if [ -z "$APPLY" ] && [ $PANELS = 1 ]; then
+    panels_update
+    echo
+    echo "Widgets installed and your panels updated."
+    exit 0
+fi
 if [ -z "$APPLY" ]; then
     echo
     echo "Done. Pick '$TITLE_DARK' or '$TITLE_LIGHT' in"
@@ -231,6 +270,9 @@ if [ $TERMINAL = 1 ]; then
         printf '\n# Borealis colors for the command line\n%s\n' "$LINE" >> "$HOME/.bashrc"
     fi
     echo "  terminal kit in $TERMDIR (new shells pick it up; see its README.md for tmux and git)"
+fi
+if [ $PANELS = 1 ]; then
+    panels_update
 fi
 if [ $FIREFOX = 1 ]; then
     if [ -z "${FFPROFILE:-}" ] || [ -z "$FFSRC" ]; then

@@ -32,6 +32,7 @@ IDS = {
     "style": SLUG, "wallpaper": SLUG, "wallpaper_lock": f"{SLUG}-Lock",
     "sounds": SLUG, "live": f"org.{SLUG.lower()}.aurora", "plymouth": SLUG.lower(),
     "kate_dark": f"{SLUG.lower()}dark", "kate_light": f"{SLUG.lower()}light",
+    "dock": f"org.{SLUG.lower()}.dock", "quicksettings": f"org.{SLUG.lower()}.quicksettings",
     "logo": SLUG.lower(),
 }
 

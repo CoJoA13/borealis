@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="darkPackage" type="String">
+      <label>Global Theme used by the dark side of the Theme tile</label>
+      <default>@LNF_DARK@</default>
+    </entry>
+    <entry name="lightPackage" type="String">
+      <label>Global Theme used by the light side of the Theme tile</label>
+      <default>@LNF_LIGHT@</default>
+    </entry>
+    <entry name="auroraPlugin" type="String">
+      <label>Wallpaper plugin the Aurora tile switches to</label>
+      <default>@AURORA@</default>
+    </entry>
+  </group>
+</kcfg>

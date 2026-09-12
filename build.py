@@ -103,6 +103,11 @@ def step_terminal():
     gen_terminal.build(OUT)
 
 
+def step_plasmoids():
+    import gen_plasmoids
+    gen_plasmoids.build(OUT)
+
+
 def step_grub():
     import gen_grub
     night, _ = wallpapers()
@@ -143,6 +148,7 @@ STEPS = {
     "live": step_live,
     "plymouth": step_plymouth,
     "terminal": step_terminal,
+    "plasmoids": step_plasmoids,
     "grub": step_grub,
     "firefox": step_firefox,
     "tweaks": step_tweaks,

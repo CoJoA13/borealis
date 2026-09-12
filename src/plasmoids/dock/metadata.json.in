@@ -1,0 +1,14 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{"Email": "@EMAIL@", "Name": "@AUTHOR@"}],
+        "Category": "Windows and Tasks",
+        "Description": "Launchers and running windows in one row, magnified under the pointer",
+        "Icon": "@LOGO@",
+        "Id": "@ID@",
+        "License": "GPL-3.0-or-later",
+        "Name": "@NAME@ Dock",
+        "Version": "@VERSION@"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

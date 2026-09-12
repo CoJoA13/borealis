@@ -114,6 +114,10 @@ def defaults(pkg):
         "[kwinrc][WindowSwitcher]",
         f"LayoutName={pkg['id']}",
         "",
+        "[kwinrc][Plugins]",
+        "magiclampEnabled=true",      # the genie minimise, like a dock deserves
+        "squashEnabled=false",
+        "",
         "[ksplashrc][KSplash]",
         f"Theme={pkg['id']}",
         "",
@@ -148,18 +152,20 @@ clock.writeConfig("dateDisplayFormat", "BesideTime");
 clock.writeConfig("dateFormat", "custom");
 clock.writeConfig("customDateFormat", "ddd d MMM");
 bar.addWidget("org.kde.plasma.panelspacer");
+bar.addWidget("@QUICK@");
 bar.addWidget("org.kde.plasma.systemtray");
 
 var dock = new Panel;
 dock.location = "bottom";
-dock.height = 2 * Math.ceil(gridUnit * 3.1 / 2);
+// tall enough that a magnified icon still fits inside the panel
+dock.height = 2 * Math.ceil(gridUnit * 4.4 / 2);
 dock.floating = true;
 dock.lengthMode = "fit";
 dock.alignment = "center";
 dock.hiding = "dodgewindows";
 dock.opacity = "translucent";
 
-var tasks = dock.addWidget("org.kde.plasma.icontasks");
+var tasks = dock.addWidget("@DOCK@");
 tasks.currentConfigGroup = ["General"];
 tasks.writeConfig("launchers", [
     "applications:org.kde.dolphin.desktop",
@@ -169,11 +175,8 @@ tasks.writeConfig("launchers", [
     "applications:org.kde.discover.desktop",
     "applications:systemsettings.desktop"
 ]);
-tasks.writeConfig("fill", false);
-tasks.writeConfig("iconSpacing", 1);
-tasks.writeConfig("showOnlyCurrentDesktop", false);
-dock.addWidget("org.kde.plasma.marginsseparator");
-dock.addWidget("org.kde.plasma.trash");
+tasks.writeConfig("iconSize", 48);
+tasks.writeConfig("magnification", 150);
 """
 
 LAYOUT_DEFAULTS = """[kwinrc][org.kde.kdecoration2]
@@ -249,7 +252,9 @@ def switcher(dest):
                     os.path.join(src, "roundedmask.frag")], check=True)
 
 
-def build(out_root, night, dawn, layout_js=LAYOUT_JS, previews=None):
+def build(out_root, night, dawn, layout_js=None, previews=None):
+    layout_js = ((layout_js or LAYOUT_JS).replace("@DOCK@", IDS["dock"])
+                 .replace("@QUICK@", IDS["quicksettings"]))
     base = os.path.join(out_root, "plasma", "look-and-feel")
     made = []
     for vid, pkg in PACKAGES.items():

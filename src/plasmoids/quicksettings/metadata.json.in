@@ -1,0 +1,14 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [{"Email": "@EMAIL@", "Name": "@AUTHOR@"}],
+        "Category": "System Information",
+        "Description": "Radios, night light, power profile, theme, brightness and volume in one popup",
+        "Icon": "configure",
+        "Id": "@ID@",
+        "License": "GPL-3.0-or-later",
+        "Name": "@NAME@ Quick Settings",
+        "Version": "@VERSION@"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

@@ -128,6 +128,32 @@ if [ "$SWITCHER" = 1 ]; then
         echo "no nested DISPLAY ('$DISPLAY'), skipped the live switcher" > "$SANDBOX/xtest.log"
     fi
 fi
+if [ "$DOCK" = 1 ]; then
+    dolphin --new-window "$HOME" >/dev/null 2>&1 &
+    D1=$!
+    konsole --profile "$PROFILE" -e bash --rcfile "$SANDBOX/demorc" >/dev/null 2>&1 &
+    D2=$!
+    sleep 5
+    qd org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
+        "$(cat "$SANDBOX/swapdock.js")"
+    sleep 5
+    shot dock-plain
+    if [ -n "$DISPLAY" ] && [ "$DISPLAY" != "$REAL_DISPLAY" ]; then
+        python3 "$SANDBOX/tap_key.py" "move:900,1168" > "$SANDBOX/dock.log" 2>&1
+        sleep 2
+        shot dock-zoom
+    fi
+    stop "$D1" "$D2"
+    sleep 1
+fi
+if [ "$QUICK" = 1 ]; then
+    plasmawindowed "$QUICK_ID" > "$SANDBOX/quick.log" 2>&1 &
+    QPID=$!
+    sleep 8
+    shot quicksettings
+    stop "$QPID"
+    sleep 1
+fi
 if [ "$TWEAKS" = 1 ]; then
     "$XDG_DATA_HOME"/*-tweaks/main.py > "$SANDBOX/tweaks.log" 2>&1 &
     APPID=$!
@@ -188,6 +214,14 @@ if [ "$EXTRAS" = 1 ]; then
     LPID=$!
     sleep 5
     shot lockscreen
+    if [ -n "$DISPLAY" ] && [ "$DISPLAY" != "$REAL_DISPLAY" ]; then
+        # wake the prompt so the password field and action buttons show
+        python3 "$SANDBOX/tap_key.py" "click:960,600" > "$SANDBOX/tap.log" 2>&1
+        sleep 2
+        python3 "$SANDBOX/tap_key.py" 0061 >> "$SANDBOX/tap.log" 2>&1
+        sleep 3
+        shot lockscreen-prompt
+    fi
     stop "$LPID"
     ksplashqml "$LNF" --test >/dev/null 2>&1 &
     KSPID=$!
@@ -309,6 +343,55 @@ QTimer.singleShot(0, lambda: b.remix(sys.argv[1], sys.argv[2] if len(sys.argv) >
 app.exec()
 """
 
+SWAP_DOCK = """
+var ps = panels();
+for (var i = 0; i < ps.length; i++) {
+    if (String(ps[i].location) !== "bottom") { continue; }
+    var ids = ps[i].widgetIds;
+    for (var j = 0; j < ids.length; j++) {
+        var w = ps[i].widgetById(ids[j]);
+        if (w && String(w.type).indexOf("icontasks") >= 0) { w.remove(); }
+    }
+    var dock = ps[i].addWidget("@DOCK_ID@");
+    print("added " + dock.type);
+}
+"""
+
+TAP_KEY = r"""import ctypes, os, sys, time
+disp = os.environ.get("DISPLAY", "")
+if not disp or disp == os.environ.get("REAL_DISPLAY", ""):
+    sys.exit("refusing: DISPLAY is not the nested one")
+x = ctypes.CDLL("libX11.so.6")
+t = ctypes.CDLL("libXtst.so.6")
+x.XOpenDisplay.restype = ctypes.c_void_p
+x.XOpenDisplay.argtypes = [ctypes.c_char_p]
+x.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+x.XFlush.argtypes = [ctypes.c_void_p]
+t.XTestFakeKeyEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
+t.XTestFakeMotionEvent.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_ulong]
+t.XTestFakeButtonEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
+d = x.XOpenDisplay(disp.encode())
+arg = sys.argv[1] if len(sys.argv) > 1 else "ff1b"
+if arg.startswith("move:"):                  # move:X,Y — hover, no click
+    cx, cy = (int(v) for v in arg.split(":")[1].split(","))
+    t.XTestFakeMotionEvent(d, 0, cx, cy, 0); x.XFlush(d)
+    print("moved to", cx, cy, "on", disp)
+elif arg.startswith("click:"):                 # click:X,Y — focus a window, then wake it
+    cx, cy = (int(v) for v in arg.split(":")[1].split(","))
+    t.XTestFakeMotionEvent(d, 0, cx, cy, 0); x.XFlush(d)
+    time.sleep(0.3)
+    t.XTestFakeButtonEvent(d, 1, 1, 0); x.XFlush(d)
+    time.sleep(0.05)
+    t.XTestFakeButtonEvent(d, 1, 0, 0); x.XFlush(d)
+    print("clicked", cx, cy, "on", disp)
+else:
+    code = x.XKeysymToKeycode(d, int(arg, 16))
+    t.XTestFakeKeyEvent(d, code, 1, 0); x.XFlush(d)
+    time.sleep(0.05)
+    t.XTestFakeKeyEvent(d, code, 0, 0); x.XFlush(d)
+    print("tapped", hex(code), "on", disp)
+"""
+
 MAXIMIZE_JS = r"""
 const wins = workspace.windowList();
 for (let i = 0; i < wins.length; i++) {
@@ -365,6 +448,8 @@ def main():
     ap.add_argument("--gtk", action="store_true", help="also show a GTK4/libadwaita dialog")
     ap.add_argument("--tweaks", action="store_true", help="also open the Borealis Tweaks app")
     ap.add_argument("--firefox", action="store_true", help="also open Firefox with the Borealis chrome")
+    ap.add_argument("--dock", action="store_true", help="swap the panel's task manager for the Borealis dock")
+    ap.add_argument("--quicksettings", action="store_true", help="open the Quick Settings widget in a window")
     ap.add_argument("--remix", metavar="HEX", default="",
                     help="also remix onto this accent through the app's backend, e.g. '#4fbf6a'")
     args = ap.parse_args()
@@ -438,6 +523,12 @@ def main():
         f.write(ARRANGE_JS)
     with open(os.path.join(sandbox, "hold_alt_tab.py"), "w") as f:
         f.write(HOLD_ALT_TAB)
+    with open(os.path.join(sandbox, "tap_key.py"), "w") as f:
+        f.write(TAP_KEY)
+    import glob as _glob
+    dock_id = os.path.basename(next(iter(_glob.glob(os.path.join(SHARE, "plasma", "plasmoids", "*.dock"))), "org.borealis.dock"))
+    with open(os.path.join(sandbox, "swapdock.js"), "w") as f:
+        f.write(SWAP_DOCK.replace("@DOCK_ID@", dock_id))
     with open(os.path.join(sandbox, "remix_test.py"), "w") as f:
         f.write(REMIX_TEST)
     for name, js in (("maximize.js", MAXIMIZE_JS), ("restore.js", RESTORE_JS)):
@@ -473,6 +564,10 @@ def main():
         "GTK": "1" if args.gtk else "0",
         "TWEAKS": "1" if args.tweaks else "0",
         "FIREFOX": "1" if args.firefox else "0",
+        "DOCK": "1" if args.dock else "0",
+        "QUICK": "1" if args.quicksettings else "0",
+        "QUICK_ID": os.path.basename(next(iter(__import__("glob").glob(
+            os.path.join(SHARE, "plasma", "plasmoids", "*.quicksettings"))), "org.borealis.quicksettings")),
         "REMIX": args.remix,
         "BOREALIS_PROJECT": HERE,
         "VARIANT": args.variant,
@@ -482,7 +577,7 @@ def main():
            "kwin_wayland", "--virtual", "--no-lockscreen",
            "--width", w, "--height", h,
            "--socket", f"wayland-borealis-{os.getpid()}"]
-    if args.switcher:
+    if args.switcher or args.dock or not args.no_extras:
         cmd.append("--xwayland")      # only so XTest can reach the nested KWin
     cmd += ["--exit-with-session", script]
     with open(os.path.join(sandbox, "kwin.log"), "w") as log:
