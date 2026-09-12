@@ -19,6 +19,8 @@
 #               login, enables its KWin bridge, and retires the panel dock
 #               (your pinned apps come along)
 #   --dock-revert   back to the panel dock
+#   --dock-merge    --dock, and fold the rest of a bottom panel into the top bar
+#               (its tray and clock, where the top bar has none) and remove it
 #   --from DIR  install a build from elsewhere (e.g. a remix built with
 #               ./build.py --accent … --name "Borealis Ember" --out DIR)
 #   --flatpak   ...for Flatpak apps too (implies --gtk; lets every Flatpak app
@@ -33,7 +35,7 @@ SRC="${BOREALIS_SRC:-$HERE/build/share}"
 DEST="${XDG_DATA_HOME:-$HOME/.local/share}"
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}"
 
-APPLY=""; LAYOUT=0; AUTO=0; KONSOLE=0; LIVE=0; GTK=0; FLATPAK=0; TERMINAL=0; FIREFOX=0; PANELS=0; DOCK=0; DOCK_REVERT=0
+APPLY=""; LAYOUT=0; AUTO=0; KONSOLE=0; LIVE=0; GTK=0; FLATPAK=0; TERMINAL=0; FIREFOX=0; PANELS=0; DOCK=0; DOCK_REVERT=0; DOCK_MERGE=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --apply) APPLY="${2:-}"; shift 2 ;;
@@ -48,8 +50,9 @@ while [ $# -gt 0 ]; do
         --panels) PANELS=1; shift ;;
         --dock) DOCK=1; shift ;;
         --dock-revert) DOCK_REVERT=1; shift ;;
+        --dock-merge) DOCK=1; DOCK_MERGE=1; shift ;;
         --from) SRC="${2:-}"; shift 2 ;;
-        -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -215,12 +218,30 @@ dock_enable() {
         }
         if (removed > 0) {
             var left = p.widgetIds;
-            var useful = 0;
+            var useful = [];
             for (var k = 0; k < left.length; k++) {
                 var lt = String(p.widgetById(left[k]).type);
-                if (lt.indexOf('panelspacer') < 0 && lt.indexOf('marginsseparator') < 0) { useful++; }
+                if (lt.indexOf('panelspacer') < 0 && lt.indexOf('marginsseparator') < 0) { useful.push(lt); }
             }
-            if (useful === 0) { p.remove(); }
+            if (useful.length === 0) {
+                p.remove();
+            } else if ($DOCK_MERGE === 1) {
+                // fold the tray and clock into the top bar (where it lacks them), then retire the panel
+                var top = null;
+                for (var m = 0; m < ps.length; m++) {
+                    if (String(ps[m].location) === 'top') { top = ps[m]; }
+                }
+                if (top) {
+                    var topTypes = [];
+                    var tids = top.widgetIds;
+                    for (var n = 0; n < tids.length; n++) { topTypes.push(String(top.widgetById(tids[n]).type)); }
+                    var carry = ['org.kde.plasma.digitalclock', 'org.kde.plasma.systemtray'];
+                    for (var c = 0; c < carry.length; c++) {
+                        if (useful.indexOf(carry[c]) >= 0 && topTypes.indexOf(carry[c]) < 0) { top.addWidget(carry[c]); }
+                    }
+                    p.remove();
+                }
+            }
         }
     }
     print(pins.join('\n'));

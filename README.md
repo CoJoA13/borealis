@@ -84,6 +84,7 @@ Or apply from the terminal — it backs up your settings first and prints the un
 | `--panels` | put the dock and Quick Settings into the panels you already have |
 | `--dock` | switch to the standalone Borealis Dock (runs now and at login; your pins come along) |
 | `--dock-revert` | back to the panel dock |
+| `--dock-merge` | `--dock`, and fold the rest of your bottom panel (tray, clock) into the top bar |
 
 `--apply` also sets the Borealis wallpaper on the lock screen (Fedora otherwise
 pins its own) and switches to the Borealis sound theme.
