@@ -15,7 +15,7 @@
     </entry>
     <entry name="magnification" type="Int">
       <label>How far an icon grows under the pointer, in percent</label>
-      <default>150</default>
+      <default>130</default>
     </entry>
     <entry name="reach" type="Int">
       <label>How many icons either side follow the pointer</label>

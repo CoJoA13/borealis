@@ -133,11 +133,11 @@ panels_update() {
                 if (t.indexOf('icontasks') >= 0 || t.indexOf('taskmanager') >= 0
                     || t.indexOf('plasma.trash') >= 0 || t.indexOf('marginsseparator') >= 0) { w.remove(); }
             }
-            p.height = 2 * Math.ceil(gridUnit * 4.4 / 2);   // room for the magnified icons
+            p.height = 2 * Math.ceil(gridUnit * 5.3 / 2);   // room for the magnified icons
             var dock = p.addWidget('$DOCK_ID');
             dock.currentConfigGroup = ['General'];
             dock.writeConfig('iconSize', 48);
-            dock.writeConfig('magnification', 150);
+            dock.writeConfig('magnification', 130);
         } else if (String(p.location) === 'top' && types.indexOf('$QUICK_ID') < 0) {
             p.addWidget('$QUICK_ID');
         }

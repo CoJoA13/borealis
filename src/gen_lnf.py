@@ -158,7 +158,7 @@ bar.addWidget("org.kde.plasma.systemtray");
 var dock = new Panel;
 dock.location = "bottom";
 // tall enough that a magnified icon still fits inside the panel
-dock.height = 2 * Math.ceil(gridUnit * 4.4 / 2);
+dock.height = 2 * Math.ceil(gridUnit * 5.3 / 2);
 dock.floating = true;
 dock.lengthMode = "fit";
 dock.alignment = "center";
@@ -176,7 +176,7 @@ tasks.writeConfig("launchers", [
     "applications:systemsettings.desktop"
 ]);
 tasks.writeConfig("iconSize", 48);
-tasks.writeConfig("magnification", 150);
+tasks.writeConfig("magnification", 130);
 """
 
 LAYOUT_DEFAULTS = """[kwinrc][org.kde.kdecoration2]

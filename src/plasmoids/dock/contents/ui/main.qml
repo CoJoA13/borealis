@@ -14,13 +14,30 @@ import org.kde.taskmanager as TaskManager
 PlasmoidItem {
     id: root
 
-    readonly property int baseSize: Plasmoid.configuration.iconSize
-    readonly property real maxZoom: Plasmoid.configuration.magnification / 100
+    readonly property real maxZoom: Math.max(1, Plasmoid.configuration.magnification / 100)
     readonly property int reach: Plasmoid.configuration.reach      // icons affected either side
     readonly property int gap: Kirigami.Units.smallSpacing
-    // the zoomed icon has to fit the panel, so cap the growth by the height
-    readonly property real fitZoom: Math.min(maxZoom, Math.max(1, (height - gap * 2) / baseSize))
+    readonly property int dotRow: 8                                // the running indicators
     readonly property bool horizontal: Plasmoid.formFactor !== PlasmaCore.Types.Vertical
+    // how much room an icon may occupy at full magnification
+    readonly property real available: Math.max(16, (horizontal ? height : width) - dotRow - gap)
+    // the resting size: what the user asked for, shrunk if the panel is too
+    // short for it to grow (a dock that can't magnify isn't much of a dock)
+    readonly property int baseSize: Math.max(16, Math.min(Plasmoid.configuration.iconSize,
+                                                          Math.floor(available / maxZoom)))
+    readonly property real fitZoom: Math.min(maxZoom, available / baseSize)
+
+    // Magnification reads the pointer against the *resting* layout: if it used
+    // live positions, growing icons would move the thing being measured and
+    // the dock would shiver.
+    function zoomFor(restCentre, pointer) {
+        if (pointer < 0) {
+            return 1;
+        }
+        const span = baseSize * reach;
+        const d = Math.abs(pointer - restCentre);
+        return d > span ? 1 : 1 + (fitZoom - 1) * (Math.cos(Math.PI * d / span) + 1) / 2;
+    }
 
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
     preferredRepresentation: fullRepresentation
@@ -47,8 +64,14 @@ PlasmoidItem {
         id: dock
 
         readonly property int itemCount: Math.max(1, taskRow.count)
-        implicitWidth: root.horizontal ? taskRow.implicitWidth : root.baseSize
-        implicitHeight: root.horizontal ? root.baseSize : taskRow.implicitHeight
+        // width at rest, plus the room the swell needs: constant, so the panel
+        // never resizes mid-hover (that would move the icons under the cursor)
+        readonly property real restWidth: itemCount * root.baseSize + (itemCount - 1) * root.gap
+        readonly property real reserve: root.baseSize * (root.fitZoom - 1) * root.reach
+        readonly property real restStart: (width - restWidth) / 2
+
+        implicitWidth: root.horizontal ? restWidth + reserve : root.baseSize
+        implicitHeight: root.horizontal ? root.baseSize : restWidth + reserve
         Layout.preferredWidth: implicitWidth
         Layout.minimumWidth: implicitWidth
         Layout.maximumWidth: implicitWidth
@@ -56,13 +79,23 @@ PlasmoidItem {
         // where the pointer is, in dock coordinates (-1 = away)
         property real pointer: -1
 
-        MouseArea {
+        function restCentreOf(index) {
+            return restStart + index * (root.baseSize + root.gap) + root.baseSize / 2;
+        }
+
+        function zoomForIndex(index) {
+            return root.zoomFor(restCentreOf(index), pointer);
+        }
+
+        // A HoverHandler, not a MouseArea: handlers are passive, so the icons'
+        // click areas and tooltips still get their events and the pointer is
+        // reported no matter what sits on top.
+        HoverHandler {
             id: hover
-            anchors.fill: parent
-            hoverEnabled: true
-            acceptedButtons: Qt.NoButton
-            onPositionChanged: mouse => dock.pointer = root.horizontal ? mouse.x : mouse.y
-            onExited: dock.pointer = -1
+            onPointChanged: dock.pointer = root.horizontal ? point.position.x : point.position.y
+            onHoveredChanged: if (!hovered) {
+                dock.pointer = -1;
+            }
         }
 
         Row {
@@ -81,37 +114,40 @@ PlasmoidItem {
                     required property int index
                     required property var model
 
-                    readonly property real centre: x + width / 2
-                    // cosine falloff: nearest icon grows most, neighbours follow
-                    readonly property real distance: dock.pointer < 0 ? 9999
-                        : Math.abs(dock.pointer - (taskRow.x + centre))
-                    readonly property real span: root.baseSize * root.reach
-                    readonly property real zoom: distance > span ? 1
-                        : 1 + (root.fitZoom - 1) * (Math.cos(Math.PI * distance / span) + 1) / 2
+                    readonly property real restCentre: dock.restCentreOf(index)
+                    readonly property real zoom: dock.zoomForIndex(index)
+                    readonly property bool hovered: dock.pointer >= 0
+                        && Math.abs(dock.pointer - restCentre) < root.baseSize / 2
 
                     width: root.baseSize * zoom
                     height: dock.height
                     Behavior on width { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
 
-                    Kirigami.Icon {
-                        id: icon
-                        source: model.decoration
-                        width: task.width - root.gap
-                        height: width
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: running.height + root.gap / 2
-                        active: mouse.containsMouse
-                        opacity: model.IsMinimized === true ? 0.55 : 1
-                        Behavior on opacity { NumberAnimation { duration: Kirigami.Units.shortDuration } }
-                    }
+                    // icon and dots travel together, centred: at rest the dock
+                    // looks even, and the swell has room on both sides
+                    Item {
+                        id: stack
+                        anchors.centerIn: parent
+                        width: task.width
+                        height: icon.height + root.dotRow
+
+                        Kirigami.Icon {
+                            id: icon
+                            source: model.decoration
+                            width: task.width
+                            height: width
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.top: parent.top
+                            active: task.hovered
+                            opacity: model.IsMinimized === true ? 0.55 : 1
+                            Behavior on opacity { NumberAnimation { duration: Kirigami.Units.shortDuration } }
+                        }
 
                     // running indicator: a dot per window, accent when active
                     Row {
                         id: running
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 2
                         spacing: 3
                         visible: model.IsWindow === true || model.IsGroupParent === true
                         Repeater {
@@ -128,23 +164,25 @@ PlasmoidItem {
                             }
                         }
                     }
+                    }
 
                     // a small bounce while an app starts up
                     SequentialAnimation {
                         running: model.IsStartup === true
                         loops: Animation.Infinite
-                        NumberAnimation { target: icon; property: "anchors.bottomMargin"
-                                          to: running.height + root.baseSize * 0.35; duration: 320
+                        NumberAnimation { target: stack; property: "anchors.verticalCenterOffset"
+                                          to: -root.baseSize * 0.3; duration: 320
                                           easing.type: Easing.OutQuad }
-                        NumberAnimation { target: icon; property: "anchors.bottomMargin"
-                                          to: running.height + root.gap / 2; duration: 420
-                                          easing.type: Easing.OutBounce }
+                        NumberAnimation { target: stack; property: "anchors.verticalCenterOffset"
+                                          to: 0; duration: 420; easing.type: Easing.OutBounce }
                     }
 
                     MouseArea {
                         id: mouse
                         anchors.fill: parent
-                        hoverEnabled: true
+                        // hover is tracked once, by the dock: a MouseArea here
+                        // would swallow those events and jitter the zoom
+                        hoverEnabled: false
                         acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
                         onClicked: click => {
                             const idx = tasks.makeModelIndex(task.index);
@@ -158,8 +196,6 @@ PlasmoidItem {
                                 tasks.requestActivate(idx);             // launches pinned apps too
                             }
                         }
-                        onPositionChanged: pos => dock.pointer = root.horizontal
-                            ? task.x + pos.x : task.y + pos.y
                     }
 
                     PlasmaCore.ToolTipArea {
@@ -191,33 +227,29 @@ PlasmoidItem {
             Item {
                 id: trash
                 visible: Plasmoid.configuration.showTrash
-                readonly property real centre: x + width / 2
-                readonly property real distance: dock.pointer < 0 ? 9999
-                    : Math.abs(dock.pointer - (taskRow.x + centre))
-                readonly property real span: root.baseSize * root.reach
-                readonly property real zoom: distance > span ? 1
-                    : 1 + (root.fitZoom - 1) * (Math.cos(Math.PI * distance / span) + 1) / 2
+                readonly property real restCentre: dock.restCentreOf(repeater.count)
+                readonly property real zoom: dock.zoomForIndex(repeater.count)
+                readonly property bool hovered: dock.pointer >= 0
+                    && Math.abs(dock.pointer - restCentre) < root.baseSize / 2
                 width: root.baseSize * zoom
                 height: dock.height
                 Behavior on width { NumberAnimation { duration: 90; easing.type: Easing.OutQuad } }
 
                 Kirigami.Icon {
                     source: "user-trash"
-                    width: trash.width - root.gap
+                    width: trash.width
                     height: width
                     anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: root.gap * 1.5
-                    active: trashMouse.containsMouse
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: -root.dotRow / 2   // line up with the app icons
+                    active: trash.hovered
                 }
 
                 MouseArea {
                     id: trashMouse
                     anchors.fill: parent
-                    hoverEnabled: true
+                    hoverEnabled: false
                     onClicked: Qt.openUrlExternally("trash:/")
-                    onPositionChanged: pos => dock.pointer = root.horizontal
-                        ? trash.x + pos.x : trash.y + pos.y
                 }
 
                 PlasmaCore.ToolTipArea {
