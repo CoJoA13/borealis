@@ -53,20 +53,29 @@ Kirigami.ApplicationWindow {
                             text: modelData.t
                             enabled: !backend.busy
                             checked: backend.variant === modelData.k
-                            QQC2.ButtonGroup.group: variantGroup
-                            onToggled: if (checked && backend.variant !== modelData.k) {
-                                backend.setVariant(modelData.k);
+                                QQC2.ButtonGroup.group: variantGroup
+                            onToggled: {
+                                if (checked && backend.variant !== modelData.k) {
+                                    backend.setVariant(modelData.k);
+                                }
+                                // clicking replaces the binding; put it back
+                                checked = Qt.binding(() => backend.variant === modelData.k);
                             }
                         }
                     }
                 }
 
                 QQC2.Switch {
+                    id: liveSwitch
                     Kirigami.FormData.label: qsTr("Animated aurora:")
                     enabled: !backend.busy
                     checked: backend.liveWallpaper
                     text: checked ? qsTr("On, desktop and lock screen") : qsTr("Off")
-                    onToggled: backend.setLiveWallpaper(checked)
+                    onToggled: {
+                        backend.setLiveWallpaper(checked);
+                        // clicking a Switch replaces the binding; put it back
+                        checked = Qt.binding(() => backend.liveWallpaper);
+                    }
                 }
 
                 QQC2.Label {

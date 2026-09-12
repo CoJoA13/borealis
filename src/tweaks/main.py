@@ -26,7 +26,7 @@ def main():
     app.setDesktopFileName("org.borealis.tweaks")
     app.setWindowIcon(QIcon.fromTheme("borealis"))
     engine = QQmlApplicationEngine()
-    backend = Backend()
+    backend = Backend(app)   # owned by the app, so QML never sees it vanish
     engine.rootContext().setContextProperty("backend", backend)
     engine.load(QUrl.fromLocalFile(os.path.join(HERE, "ui", "main.qml")))
     if not engine.rootObjects():

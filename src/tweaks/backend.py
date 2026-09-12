@@ -5,6 +5,7 @@ Long jobs (a remix rebuild) run in a thread and report progress line by line.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -65,9 +66,10 @@ class Backend(QObject):
     logged = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self._busy = False
+        self._live_override = None
         self._state = {}
         if os.path.exists(STATE):
             try:
@@ -108,10 +110,35 @@ class Backend(QObject):
     def paletteName(self):
         return self._state.get("name", "Borealis")
 
+    def _wallpaper_plugins(self):
+        """What the desktops actually use: ask plasmashell, fall back to config.
+
+        The config key is `wallpaperplugin` directly under [Containments][<n>],
+        where <n> is whatever number that desktop happens to have."""
+        r = run(["qdbus-qt6", "org.kde.plasmashell", "/PlasmaShell",
+                 "org.kde.PlasmaShell.evaluateScript",
+                 "var d = desktops(); var out = []; "
+                 "for (var i = 0; i < d.length; i++) { out.push(d[i].wallpaperPlugin); } "
+                 "print(out.join(','));"])
+        if r.returncode == 0 and r.stdout.strip():
+            return [x.strip() for x in r.stdout.strip().split(",") if x.strip()]
+        found, section = [], ""
+        path = os.path.join(CONF, "plasma-org.kde.plasma.desktop-appletsrc")
+        if os.path.exists(path):
+            for line in open(path):
+                line = line.rstrip("\n")
+                if line.startswith("["):
+                    section = line
+                elif line.startswith("wallpaperplugin=") and re.fullmatch(r"\[Containments\]\[\d+\]", section):
+                    found.append(line.split("=", 1)[1])
+        return found
+
     @Property(bool, notify=changed)
     def liveWallpaper(self):
-        return "aurora" in kread("plasma-org.kde.plasma.desktop-appletsrc",
-                                 "Containments/1/Wallpaper", "plugin", "")
+        if self._live_override is not None:
+            return self._live_override        # until plasmashell catches up
+        live = self._state.get("live_id", "org.borealis.aurora")
+        return any(p == live for p in self._wallpaper_plugins())
 
     @Property(bool, notify=changed)
     def hasProject(self):
@@ -191,6 +218,18 @@ class Backend(QObject):
         run(["qdbus-qt6", "org.kde.plasmashell", "/PlasmaShell",
              "org.kde.PlasmaShell.evaluateScript", script])
         kwrite("kscreenlockerrc", "Greeter", "WallpaperPlugin", plugin)
+        if not on:
+            # a plain image desktop needs an image; keep ours
+            wall = os.path.join(DATA, "wallpapers", self._state.get("name", "Borealis").replace(" ", ""))
+            if os.path.isdir(wall):
+                run(["plasma-apply-wallpaperimage", wall])
+        # show the new state at once; re-read once plasmashell has applied it
+        self._live_override = on
+        self.changed.emit()
+        threading.Timer(2.5, self._clear_override).start()
+
+    def _clear_override(self):
+        self._live_override = None
         self.changed.emit()
 
     @Slot(str, str, bool, bool)
