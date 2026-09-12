@@ -1,0 +1,41 @@
+name: build & check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3-pil python3-cairo python3-gi gir1.2-rsvg-2.0 \
+            ffmpeg grub-common qt6-shadertools-dev fonts-dejavu-core
+          python3 -m pip install --quiet PySide6 || echo "PySide6 unavailable: the QML check will be skipped"
+          # qsb lives outside PATH on Debian/Ubuntu
+          echo /usr/lib/qt6/bin >> "$GITHUB_PATH"
+
+      - name: Build everything
+        run: ./build.py
+
+      - name: Check
+        run: tools/check.py
+
+      - name: Build a remix too (proves the palette stays parametric)
+        run: ./build.py --accent "#ff8a5b" --name "Borealis Ember" --out /tmp/ember colors plasmastyle aurorae icons gtk terminal lnf
+
+      - name: Package
+        run: tools/package.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: borealis-archives
+          path: dist/*.tar.gz
+          retention-days: 14

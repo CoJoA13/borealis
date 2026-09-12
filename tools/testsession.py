@@ -148,6 +148,29 @@ if [ "$REMIX" != "" ]; then
     stop "$RPID"
     sleep 1
 fi
+if [ "$FIREFOX" = 1 ]; then
+    FFP="$SANDBOX/ffprofile"
+    mkdir -p "$FFP/chrome"
+    cp "$XDG_DATA_HOME"/firefox/*/*.css "$FFP/chrome/"
+    for part in userChrome userContent; do
+        printf '@import "%s";\n' "$(basename "$(ls "$FFP/chrome"/*-$part.css)")" > "$FFP/chrome/$part.css"
+    done
+    {
+        echo 'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);'
+        echo 'user_pref("browser.shell.checkDefaultBrowser", false);'
+        echo 'user_pref("browser.startup.homepage_override.mstone", "ignore");'
+        echo 'user_pref("browser.aboutwelcome.enabled", false);'
+        echo 'user_pref("datareporting.policy.dataSubmissionEnabled", false);'
+        echo 'user_pref("browser.startup.page", 0);'
+        [ "$VARIANT" = dark ] && echo 'user_pref("ui.systemUsesDarkTheme", 1);'
+    } > "$FFP/user.js"
+    firefox --no-remote --profile "$FFP" about:blank > "$SANDBOX/firefox.log" 2>&1 &
+    FXPID=$!
+    sleep 16
+    shot firefox
+    stop "$FXPID"
+    sleep 2
+fi
 if [ "$GTK" = 1 ]; then
     # the sandbox's portal starts mid theme switch and can report the wrong
     # light/dark preference, so tell libadwaita directly
@@ -341,6 +364,7 @@ def main():
     ap.add_argument("--switcher", action="store_true", help="also show the Alt+Tab switcher (preview helper)")
     ap.add_argument("--gtk", action="store_true", help="also show a GTK4/libadwaita dialog")
     ap.add_argument("--tweaks", action="store_true", help="also open the Borealis Tweaks app")
+    ap.add_argument("--firefox", action="store_true", help="also open Firefox with the Borealis chrome")
     ap.add_argument("--remix", metavar="HEX", default="",
                     help="also remix onto this accent through the app's backend, e.g. '#4fbf6a'")
     args = ap.parse_args()
@@ -348,8 +372,9 @@ def main():
         sys.exit("build/share missing: run ./build.py first")
 
     shots = os.path.join(HERE, "build", "shots", args.variant)
-    shutil.rmtree(shots, ignore_errors=True)
-    os.makedirs(shots)
+    # keep what earlier runs captured: the look-and-feel previews are built
+    # from them, and one run rarely takes every screenshot
+    os.makedirs(shots, exist_ok=True)
     sandbox = tempfile.mkdtemp(prefix="borealis-test-")
     for d in ("config", "config/kdedefaults", "cache", "state"):
         os.makedirs(os.path.join(sandbox, d))
@@ -447,6 +472,7 @@ def main():
         "OUTSCALE": args.scale,
         "GTK": "1" if args.gtk else "0",
         "TWEAKS": "1" if args.tweaks else "0",
+        "FIREFOX": "1" if args.firefox else "0",
         "REMIX": args.remix,
         "BOREALIS_PROJECT": HERE,
         "VARIANT": args.variant,

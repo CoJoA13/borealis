@@ -32,7 +32,7 @@ if [ "$MODE" = restore ]; then
     # plasmashell saves its layout on exit, so stop it before copying files back
     systemctl --user stop plasma-plasmashell.service 2>/dev/null || kquitapp6 plasmashell 2>/dev/null || true
     for f in "$BACKUP"/*; do
-        case "$(basename "$f")" in kdedefaults|gtk-4.0|flatpak-override-added|bashrc|bashrc.absent) continue ;; esac
+        case "$(basename "$f")" in kdedefaults|gtk-4.0|firefox|flatpak-override-added|bashrc|bashrc.absent) continue ;; esac
         cp -a "$f" "$CONF/"
         echo "  restored $(basename "$f")"
     done
@@ -51,6 +51,19 @@ if [ "$MODE" = restore ]; then
         if [ -f "$BACKUP/gtk-4.0/gtk.css" ]; then cp -a "$BACKUP/gtk-4.0/gtk.css" "$CONF/gtk-4.0/gtk.css"
         else rm -f "$CONF/gtk-4.0/gtk.css"; fi
         echo "  restored GTK4 settings"
+    fi
+    if [ -d "$BACKUP/firefox" ]; then
+        ffp="$(cat "$BACKUP/firefox/profile-path" 2>/dev/null || true)"
+        if [ -n "$ffp" ] && [ -d "$ffp" ]; then
+            rm -f "$ffp"/chrome/borealis*-user*.css
+            for f in userChrome.css userContent.css; do
+                if [ -f "$BACKUP/firefox/$f" ]; then cp -a "$BACKUP/firefox/$f" "$ffp/chrome/$f"
+                else rm -f "$ffp/chrome/$f"; fi
+            done
+            if [ -f "$BACKUP/firefox/user.js" ]; then cp -a "$BACKUP/firefox/user.js" "$ffp/user.js"
+            else rm -f "$ffp/user.js"; fi
+            echo "  restored Firefox (restart it)"
+        fi
     fi
     [ -f "$BACKUP/flatpak-override-added" ] && drop_flatpak_override
     if [ -f "$BACKUP/bashrc" ]; then cp -a "$BACKUP/bashrc" "$HOME/.bashrc"; echo "  restored ~/.bashrc"
@@ -113,4 +126,15 @@ if [ -d "$CONF/borealis/terminal" ]; then
         "$HOME/.bashrc" 2>/dev/null || true
     echo "  - ~/.config/borealis/terminal (and its ~/.bashrc line)"
 fi
+for ffroot in "$CONF/mozilla/firefox" "$HOME/.mozilla/firefox"; do
+    for prof in "$ffroot"/*/chrome; do
+        [ -d "$prof" ] || continue
+        if ls "$prof"/*-userChrome.css >/dev/null 2>&1; then
+            rm -f "$prof"/*-userChrome.css "$prof"/*-userContent.css
+            sed -i '/^@import ".*-user\(Chrome\|Content\)\.css";$/d' \
+                "$prof/userChrome.css" "$prof/userContent.css" 2>/dev/null || true
+            echo "  - Firefox styling in ${prof%/chrome}"
+        fi
+    done
+done
 echo "Borealis removed from $DEST."

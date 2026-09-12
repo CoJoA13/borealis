@@ -122,7 +122,7 @@ PACKAGES = {
     "plasma/look-and-feel/Borealis-Dark": [
         "metadata.json", "contents/defaults", "contents/layouts/org.kde.plasma.desktop-layout.js",
         "contents/splash/Splash.qml", "contents/windowswitcher/WindowSwitcher.qml",
-        "contents/windowswitcher/roundedmask.frag.qsb", "contents/previews/preview.png"],
+        "contents/windowswitcher/roundedmask.frag.qsb"],
     "plasma/look-and-feel/Borealis-Light": ["metadata.json", "contents/defaults"],
     "plasma/desktoptheme/Borealis": [
         "metadata.json", "plasmarc", "widgets/panel-background.svgz", "dialogs/background.svgz",
@@ -152,6 +152,12 @@ def check_packages():
     if not os.path.isdir(SHARE):
         return bad("packages", "build/share is missing — run ./build.py")
     missing = []
+    # KCM previews come from tools/testsession.py, so they only exist locally
+    if os.path.exists(os.path.join(HERE, "build", "shots", "dark", "windows.png")):
+        for vid in ("Dark", "Light"):
+            rel = f"plasma/look-and-feel/Borealis-{vid}/contents/previews/preview.png"
+            if not os.path.exists(os.path.join(SHARE, rel)):
+                missing.append(rel + " (rebuild the lnf step after a test session)")
     for pkg, files in PACKAGES.items():
         for rel in files:
             if not os.path.exists(os.path.join(SHARE, pkg, rel)):

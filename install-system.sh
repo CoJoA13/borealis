@@ -10,6 +10,8 @@
 #   sudo ./install-system.sh --plymouth        also install + select the Borealis
 #                                              boot splash (rebuilds the initramfs)
 #   sudo ./install-system.sh --plymouth-revert go back to the previous boot splash
+#   sudo ./install-system.sh --grub           Borealis GRUB menu (rewrites grub.cfg)
+#   sudo ./install-system.sh --grub-revert    back to the plain text GRUB menu
 set -euo pipefail
 
 [ "$(id -u)" = 0 ] || { echo "Please run with sudo:  sudo $0 $*" >&2; exit 1; }
@@ -25,6 +27,47 @@ ITEMS=(
     "icons/Borealis-Snow-Cursors" "icons/Borealis-Ink-Cursors"
     "wallpapers/Borealis" "wallpapers/Borealis-Lock"
 )
+
+GRUBDIR=/boot/grub2/themes
+GRUBDEF=/etc/default/grub
+grub_cfg() { [ -f /boot/grub2/grub.cfg ] && echo /boot/grub2/grub.cfg || echo /boot/efi/EFI/fedora/grub.cfg; }
+grub_key() {   # key value — set it, or add it if it isn't there
+    if grep -q "^$1=" "$GRUBDEF"; then sed -i "s|^$1=.*|$1=$2|" "$GRUBDEF"
+    else printf '%s=%s\n' "$1" "$2" >> "$GRUBDEF"; fi
+}
+
+if [ "${1:-}" = --grub ] || [ "${1:-}" = --grub-revert ]; then
+    theme="$(basename "$(ls -d "$SRC"/grub/themes/* 2>/dev/null | head -1)" 2>/dev/null || echo borealis)"
+    if [ "${1:-}" = --grub-revert ]; then
+        if [ -f "$GRUBDEF.borealis-backup" ]; then
+            cp -a "$GRUBDEF.borealis-backup" "$GRUBDEF"
+            rm -f "$GRUBDEF.borealis-backup"
+            echo "Restored $GRUBDEF"
+        else
+            grub_key GRUB_TERMINAL_OUTPUT '"console"'
+            sed -i '/^GRUB_THEME=/d' "$GRUBDEF"
+            echo "No backup found; switched GRUB back to text mode"
+        fi
+        rm -rf "${GRUBDIR:?}/$theme"
+    else
+        [ -d "$SRC/grub/themes/$theme" ] || { echo "GRUB theme not built — run ./build.py first" >&2; exit 1; }
+        mkdir -p "$GRUBDIR"
+        rm -rf "${GRUBDIR:?}/$theme"
+        cp -r --no-preserve=ownership "$SRC/grub/themes/$theme" "$GRUBDIR/$theme"
+        chmod -R a+rX,go-w "$GRUBDIR/$theme"
+        command -v restorecon >/dev/null && restorecon -R "$GRUBDIR/$theme" || true
+        [ -f "$GRUBDEF.borealis-backup" ] || cp -a "$GRUBDEF" "$GRUBDEF.borealis-backup"
+        grub_key GRUB_THEME "\"$GRUBDIR/$theme/theme.txt\""
+        grub_key GRUB_TERMINAL_OUTPUT '"gfxterm"'
+        grub_key GRUB_GFXMODE '"auto"'
+        grub_key GRUB_GFXPAYLOAD_LINUX '"keep"'
+        echo "  + $GRUBDIR/$theme"
+    fi
+    echo "Regenerating the boot menu…"
+    grub2-mkconfig -o "$(grub_cfg)" >/dev/null
+    echo "Done. If the menu ever misbehaves, undo it with: sudo $0 --grub-revert"
+    exit 0
+fi
 
 PLY=/usr/share/plymouth/themes/borealis
 if [ "${1:-}" = --plymouth-revert ]; then

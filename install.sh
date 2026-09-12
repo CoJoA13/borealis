@@ -12,6 +12,7 @@
 #   --live      use the animated Borealis Aurora wallpaper (desktop + lock screen)
 #   --gtk       Borealis colors for GTK4/libadwaita apps
 #   --terminal  Borealis for bat, tmux, git, ls, fzf and the bash prompt
+#   --firefox   Borealis for Firefox's own window (userChrome.css)
 #   --from DIR  install a build from elsewhere (e.g. a remix built with
 #               ./build.py --accent … --name "Borealis Ember" --out DIR)
 #   --flatpak   ...for Flatpak apps too (implies --gtk; lets every Flatpak app
@@ -26,7 +27,7 @@ SRC="${BOREALIS_SRC:-$HERE/build/share}"
 DEST="${XDG_DATA_HOME:-$HOME/.local/share}"
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}"
 
-APPLY=""; LAYOUT=0; AUTO=0; KONSOLE=0; LIVE=0; GTK=0; FLATPAK=0; TERMINAL=0
+APPLY=""; LAYOUT=0; AUTO=0; KONSOLE=0; LIVE=0; GTK=0; FLATPAK=0; TERMINAL=0; FIREFOX=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --apply) APPLY="${2:-}"; shift 2 ;;
@@ -37,14 +38,15 @@ while [ $# -gt 0 ]; do
         --gtk) GTK=1; shift ;;
         --flatpak) GTK=1; FLATPAK=1; shift ;;
         --terminal) TERMINAL=1; shift ;;
+        --firefox) FIREFOX=1; shift ;;
         --from) SRC="${2:-}"; shift 2 ;;
-        -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
 case "$APPLY" in ""|dark|light) ;; *) echo "--apply takes 'dark' or 'light'" >&2; exit 2 ;; esac
-if [ -z "$APPLY" ] && { [ $LAYOUT = 1 ] || [ $AUTO = 1 ] || [ $KONSOLE = 1 ] || [ $LIVE = 1 ] || [ $GTK = 1 ] || [ $TERMINAL = 1 ]; }; then
-    echo "--layout, --auto, --konsole, --live, --gtk, --flatpak and --terminal need --apply dark|light" >&2; exit 2
+if [ -z "$APPLY" ] && { [ $LAYOUT = 1 ] || [ $AUTO = 1 ] || [ $KONSOLE = 1 ] || [ $LIVE = 1 ] || [ $GTK = 1 ] || [ $TERMINAL = 1 ] || [ $FIREFOX = 1 ]; }; then
+    echo "--layout, --auto, --konsole, --live, --gtk, --flatpak, --terminal and --firefox need --apply dark|light" >&2; exit 2
 fi
 
 if [ ! -d "$SRC" ]; then
@@ -73,6 +75,43 @@ LIVE_ID="$(basename "$(ls -d "$SRC"/plasma/wallpapers/* 2>/dev/null | head -1)")
 SOUND_ID="$(basename "$(ls -d "$SRC"/sounds/* 2>/dev/null | head -1)")"
 GTKCSS="$(basename "$(ls "$SRC"/gtk/*/*-libadwaita.css 2>/dev/null | head -1)")"
 TERMSRC="$(ls -d "$SRC"/terminal/* 2>/dev/null | head -1)"
+FFSRC="$(ls -d "$SRC"/firefox/* 2>/dev/null | head -1)"
+# Firefox' default profile (XDG path first: Firefox 128+ moved there)
+ff_profile() {
+    python3 - <<'PYEOF'
+import configparser, os, sys
+for root in (os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"),
+                          "mozilla", "firefox"),
+             os.path.expanduser("~/.mozilla/firefox")):
+    ini = os.path.join(root, "profiles.ini")
+    if not os.path.exists(ini):
+        continue
+    cp = configparser.ConfigParser()
+    cp.read(ini)
+    path = ""
+    for sec in cp.sections():                    # the install's own default wins
+        if sec.startswith("Install") and cp[sec].get("Default"):
+            path = cp[sec]["Default"]
+            break
+    if not path:
+        for sec in cp.sections():
+            if sec.startswith("Profile") and cp[sec].get("Default") == "1":
+                path = cp[sec].get("Path", "")
+                break
+    if not path:
+        for sec in cp.sections():
+            if sec.startswith("Profile") and cp[sec].get("Path"):
+                path = cp[sec]["Path"]
+                break
+    if path:
+        full = path if os.path.isabs(path) else os.path.join(root, path)
+        if os.path.isdir(full):
+            print(full)
+            sys.exit(0)
+sys.exit(1)
+PYEOF
+}
+
 meta_name() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["KPlugin"]["Name"])' "$1" 2>/dev/null; }
 TITLE_DARK="$(meta_name "$SRC/plasma/look-and-feel/$THEME_DARK/metadata.json")"
 TITLE_LIGHT="$(meta_name "$SRC/plasma/look-and-feel/$THEME_LIGHT/metadata.json")"
@@ -136,6 +175,16 @@ if [ -d "$CONF/kdedefaults" ]; then cp -a "$CONF/kdedefaults" "$BACKUP/kdedefaul
 if [ $TERMINAL = 1 ]; then
     if [ -f "$HOME/.bashrc" ]; then cp -a "$HOME/.bashrc" "$BACKUP/bashrc"; else touch "$BACKUP/bashrc.absent"; fi
 fi
+if [ $FIREFOX = 1 ]; then
+    FFPROFILE="$(ff_profile || true)"
+    if [ -n "$FFPROFILE" ]; then
+        mkdir -p "$BACKUP/firefox"
+        for f in chrome/userChrome.css chrome/userContent.css user.js; do
+            [ -f "$FFPROFILE/$f" ] && cp -a "$FFPROFILE/$f" "$BACKUP/firefox/$(basename "$f")"
+        done
+        printf '%s\n' "$FFPROFILE" > "$BACKUP/firefox/profile-path"
+    fi
+fi
 if [ $GTK = 1 ]; then
     mkdir -p "$BACKUP/gtk-4.0"
     if [ -f "$CONF/gtk-4.0/gtk.css" ]; then cp -a "$CONF/gtk-4.0/gtk.css" "$BACKUP/gtk-4.0/"; else touch "$BACKUP/gtk-4.0/.absent"; fi
@@ -182,6 +231,28 @@ if [ $TERMINAL = 1 ]; then
         printf '\n# Borealis colors for the command line\n%s\n' "$LINE" >> "$HOME/.bashrc"
     fi
     echo "  terminal kit in $TERMDIR (new shells pick it up; see its README.md for tmux and git)"
+fi
+if [ $FIREFOX = 1 ]; then
+    if [ -z "${FFPROFILE:-}" ] || [ -z "$FFSRC" ]; then
+        echo "  Firefox: no profile found — start Firefox once, then re-run with --firefox"
+    else
+        mkdir -p "$FFPROFILE/chrome"
+        cp "$FFSRC"/*.css "$FFPROFILE/chrome/"
+        for part in userChrome userContent; do
+            css="$FFPROFILE/chrome/$part.css"
+            imp="@import \"$(basename "$(ls "$FFSRC"/*-$part.css)")\";"
+            if ! grep -qxF "$imp" "$css" 2>/dev/null; then
+                # @import has to come first in a CSS file
+                printf '%s\n' "$imp" > "$css.borealis-tmp"
+                [ -f "$css" ] && cat "$css" >> "$css.borealis-tmp"
+                mv "$css.borealis-tmp" "$css"
+            fi
+        done
+        pref='user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);'
+        grep -qF 'legacyUserProfileCustomizations' "$FFPROFILE/user.js" 2>/dev/null || \
+            printf '%s\n' "$pref" >> "$FFPROFILE/user.js"
+        echo "  Firefox styled (restart it): $FFPROFILE"
+    fi
 fi
 if [ $GTK = 1 ]; then
     # our own file + one import line; KDE rewrites gtk.css but keeps extra lines

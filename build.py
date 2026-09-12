@@ -103,6 +103,17 @@ def step_terminal():
     gen_terminal.build(OUT)
 
 
+def step_grub():
+    import gen_grub
+    night, _ = wallpapers()
+    gen_grub.build(OUT, night)
+
+
+def step_firefox():
+    import gen_firefox
+    gen_firefox.build(OUT)
+
+
 def step_tweaks():
     import gen_tweaks
     gen_tweaks.build(OUT)
@@ -132,6 +143,8 @@ STEPS = {
     "live": step_live,
     "plymouth": step_plymouth,
     "terminal": step_terminal,
+    "grub": step_grub,
+    "firefox": step_firefox,
     "tweaks": step_tweaks,
     "gtk": step_gtk,
     "lnf": step_lnf,

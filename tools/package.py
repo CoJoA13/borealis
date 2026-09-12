@@ -46,6 +46,9 @@ ARCHIVES = {
     f"{SLUG}-plymouth": ("Plymouth Themes", [f"plymouth/themes/{IDS['plymouth']}"]),
     f"{SLUG}-gtk4": ("GTK4/libadwaita Themes", [f"gtk/{SLUG.lower()}"]),
     f"{SLUG}-terminal": ("Terminal / CLI", [f"terminal/{SLUG.lower()}"]),
+    f"{SLUG}-firefox": ("Firefox", [f"firefox/{SLUG.lower()}"]),
+    f"{SLUG}-grub": ("GRUB Themes", [f"grub/themes/{IDS['plymouth']}"]),
+    f"{SLUG}-tweaks-app": ("Plasma Add-ons", [f"{SLUG.lower()}-tweaks"]),
 }
 
 

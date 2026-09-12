@@ -1,5 +1,7 @@
 # Borealis — a Global Theme for KDE Plasma 6
 
+[![build & check](https://github.com/CoJoA13/borealis/actions/workflows/check.yml/badge.svg)](https://github.com/CoJoA13/borealis/actions/workflows/check.yml)
+
 Aurora over the mountains: ink-navy nights and polar-dawn days, periwinkle and
 aurora-teal accents, frosted 12 px surfaces and pill-shaped titlebar buttons.
 Built for Fedora 44 / Plasma 6.7.
@@ -14,9 +16,11 @@ Built for Fedora 44 / Plasma 6.7.
 
 ![GTK4 / libadwaita app in Borealis Dark and Light](docs/gtk.jpg)
 
-| Borealis Tweaks |
-|---|
-| ![Borealis Tweaks](docs/tweaks.jpg) |
+| Borealis Tweaks | Firefox |
+|---|---|
+| ![Borealis Tweaks](docs/tweaks.jpg) | ![Firefox with the Borealis chrome](docs/firefox-dark.jpg) |
+
+![The GRUB menu](docs/grub.jpg)
 
 ## What's inside
 
@@ -38,6 +42,8 @@ Built for Fedora 44 / Plasma 6.7.
 | Desktop layout | built into each Global Theme | Floating top bar (launcher, global menu, centered clock, tray) + floating dock |
 | Konsole / Kate | Borealis Dark / Light | Terminal schemes + profiles, editor themes |
 | Tweaks app | **Borealis Tweaks** | Switch variant, remix the palette onto any colour, toggle the animated aurora, undo |
+| Firefox | `borealis-userChrome.css` | Toolbars, tabs, address bar and menus in Borealis (`--firefox`) |
+| GRUB menu | Borealis | Aurora boot menu, so power-on to desktop is one look (`--grub`) |
 | Command line | bat, tmux, git, `ls`, fzf, bash prompt | One palette for the terminal's contents too (`--terminal`) |
 | GTK4 / libadwaita | `borealis-libadwaita.css` | Borealis surfaces and the exact accent for GNOME apps, light/dark live (GTK3 apps already follow via Breeze-GTK) |
 
@@ -68,6 +74,7 @@ Or apply from the terminal — it backs up your settings first and prints the un
 | `--gtk` | Borealis colors for GTK4/libadwaita apps |
 | `--flatpak` | same for Flatpak apps (implies `--gtk`; gives every Flatpak read-only access to `~/.config/gtk-4.0`) |
 | `--terminal` | bat, tmux, git, `ls`, fzf and prompt colors (adds one line to `~/.bashrc`) |
+| `--firefox` | Borealis chrome for Firefox (writes into your Firefox profile) |
 
 `--apply` also sets the Borealis wallpaper on the lock screen (Fedora otherwise
 pins its own) and switches to the Borealis sound theme.
@@ -106,12 +113,15 @@ Borealis Dark) and *Configure Day/Night Cycle…* — or `./install.sh --apply d
 ```bash
 sudo ./install-system.sh              # system-wide copies for the login screen
 sudo ./install-system.sh --plymouth   # also the Borealis boot splash (rebuilds the initramfs)
+sudo ./install-system.sh --grub       # and the GRUB menu (rewrites grub.cfg)
 ```
 
 Then *System Settings › Login Screen* › **Apply Plasma Settings…** and, under
 **Configure Appearance…**, pick an image from `/usr/local/share/wallpapers/Borealis/`.
 `sudo ./install-system.sh --remove` undoes the copies;
-`sudo ./install-system.sh --plymouth-revert` restores the previous boot splash.
+`sudo ./install-system.sh --plymouth-revert` restores the previous boot splash,
+`--grub-revert` puts the plain text boot menu back.
+`tools/grub_mock.py` previews the boot menu without rebooting.
 
 ### Konsole and Kate
 
