@@ -100,6 +100,10 @@ class DockService(QObject):
     def Log(self, text):
         print("bridge:", text, flush=True)
 
+    @Slot(int)
+    def ActivateSlot(self, number):
+        self.controller.activateSlot(number)
+
     @Slot()
     def Reload(self):
         self.controller.settings.load()
@@ -113,7 +117,8 @@ class DockService(QObject):
         """The resting layout, for tests: where each row sits along the dock."""
         model, settings = self.controller.model, self.controller.settings
         rows = [{"kind": it["kind"], "appId": it.get("appId", ""), "windows": it.get("windowCount", 0),
-                 "active": it.get("active", False), "launching": it.get("launching", False)}
+                 "active": it.get("active", False), "launching": it.get("launching", False),
+                 "badge": it.get("badge", 0), "progress": it.get("progress", -1.0)}
                 for it in model.items]
         return json.dumps({"offsets": model.restOffsets, "length": model.restLength,
                            "iconSize": settings.get("iconSize"), "margin": settings.get("margin"),

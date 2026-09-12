@@ -304,6 +304,12 @@ class Backend(QObject):
                   "Done — the boot splash appears at the next start."
                   if what else "Copied system-wide; now use Login Screen › Apply Plasma Settings.")
 
+    def runInstaller(self, args, done_msg):
+        script = os.path.join(PROJECT, "install.sh")
+        if not os.path.exists(script):
+            return self.finished.emit(False, "install.sh was not found.")
+        self._job([("install.sh " + " ".join(args), [script] + list(args))], done_msg)
+
     @Slot(str)
     def launch(self, what):
         cmds = {

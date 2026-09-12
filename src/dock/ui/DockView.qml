@@ -195,6 +195,13 @@ Item {
         dock.requestMenu(it ? it.index : -1, window, o.x - g.x + r.x, o.y - g.y + r.y, r.width, r.height, edge);
     }
 
+    function openStack(it) {
+        const r = it.mapToItem(null, 0, 0, it.width, it.height);
+        const g = dock.screenRect(window);
+        const o = screenOrigin();
+        dock.requestStack(it.index, window, o.x - g.x + r.x, o.y - g.y + r.y, r.width, r.height, edge);
+    }
+
     // ---- dragging icons -----------------------------------------------------
     property int dragRow: -1
     property real dragX: 0

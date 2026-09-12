@@ -47,10 +47,12 @@ def main():
     except ImportError:
         sys.exit(f"{ids.NAME} Dock needs PySide6:  sudo dnf install python3-pyside6")
     from apps import AppIndex
+    from badges import Badges
     from bridge import Bridge, DockService
     from controller import Controller
     from model import DockModel
     from settings import Settings
+    from stacks import StackIndex
 
     app = QGuiApplication(sys.argv)
     # Qt picked its shell integration while starting up; apps launched from the
@@ -71,8 +73,10 @@ def main():
     settings = Settings(parent=app)
     apps = AppIndex(parent=app)
     bridge = Bridge(parent=app)
-    model = DockModel(settings, apps, bridge, parent=app)
-    controller = Controller(app, settings, apps, bridge, model, parent=app)
+    badges = Badges(parent=app)
+    stacks = StackIndex(parent=app)
+    model = DockModel(settings, apps, bridge, badges=badges, stacks=stacks, parent=app)
+    controller = Controller(app, settings, apps, bridge, model, stacks=stacks, parent=app)
     service = DockService(bridge, controller, parent=app)
     if not bus.registerObject(ids.PATH, ids.INTERFACE, service,
                               QDBusConnection.RegisterOption.ExportAllSlots):
@@ -93,6 +97,7 @@ def main():
 
     if os.environ.get("BOREALIS_DOCK_DEBUG") == "1":
         bridge.send("debug", on=True)
+    controller.push_config()
     bridge.send("resync")          # a bridge that loaded before us reports in
     code = app.exec()
     del engine                     # the QML goes before the objects it binds to

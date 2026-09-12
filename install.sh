@@ -176,10 +176,31 @@ kwin_bridge() {     # on | off
     local value=false
     [ "$1" = on ] && value=true
     kwriteconfig6 --file kwinrc --group Plugins --key "${DOCK_BRIDGE}Enabled" "$value"
+    # unload first: a script that is already running keeps its old code otherwise
+    qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "$DOCK_BRIDGE" >/dev/null 2>&1 || true
     qdbus-qt6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
-    if [ "$1" = off ]; then
-        qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "$DOCK_BRIDGE" >/dev/null 2>&1 || true
-    fi
+}
+task_manager_keys() {  # none | meta
+    # plasmashell keeps Meta+1…9 for a task manager even when there is none, and
+    # the first owner of a key wins. "none" is a user setting Plasma remembers;
+    # "meta" hands the keys back.
+    local n keys
+    for n in 1 2 3 4 5 6 7 8 9 10; do
+        keys="0"
+        [ "$1" = meta ] && [ "$n" -lt 10 ] && keys="1 1 $(( 0x10000000 | (0x30 + n) ))"
+        # shellcheck disable=SC2086
+        busctl --user call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setForeignShortcutKeys \
+            'asa(ai)' 4 plasmashell "activate task manager entry $n" plasmashell \
+            "Activate Task Manager Entry $n" $keys >/dev/null 2>&1 || true
+    done
+}
+dock_refresh() {    # after an update: the running dock and bridge pick up the new files
+    dock_ids 2>/dev/null || return 0
+    [ -L "$HOME/.local/bin/$DOCK_EXE" ] || return 0
+    kwin_bridge on
+    systemctl --user daemon-reload
+    systemctl --user try-restart "$DOCK_EXE.service" >/dev/null 2>&1 || true
+    echo "  the dock and its KWin bridge reloaded"
 }
 dock_enable() {
     dock_ids || return 1
@@ -189,6 +210,7 @@ dock_enable() {
     for f in plasma-org.kde.plasma.desktop-appletsrc plasmashellrc; do
         if [ -f "$CONF/$f" ]; then cp -a "$CONF/$f" "$state/"; fi
     done
+    task_manager_keys none
     kwin_bridge on
     # the command doubles as the Global Theme layout's hint to skip the panel dock
     mkdir -p "$HOME/.local/bin"
@@ -256,7 +278,8 @@ with open(sys.argv[1], "w") as f:
         echo "  your pinned apps came along ($settings)"
     fi
     systemctl --user daemon-reload
-    if systemctl --user enable --now "$DOCK_EXE.service" >/dev/null 2>&1; then
+    systemctl --user enable "$DOCK_EXE.service" >/dev/null 2>&1 || true
+    if systemctl --user restart "$DOCK_EXE.service" >/dev/null 2>&1; then
         echo "  $DOCK_EXE is running, and starts with every Plasma session"
     else
         echo "  couldn't start $DOCK_EXE.service — see: journalctl --user -u $DOCK_EXE"
@@ -268,6 +291,7 @@ dock_revert() {
     local launchers
     systemctl --user disable --now "$DOCK_EXE.service" >/dev/null 2>&1 || true
     kwin_bridge off
+    task_manager_keys meta
     rm -f "$HOME/.local/bin/$DOCK_EXE"
     launchers="$(python3 -c 'import json, sys
 try:
@@ -370,6 +394,9 @@ CACHE="${XDG_CACHE_HOME:-$HOME/.cache}"
 rm -f "$CACHE"/plasma_theme_"$THEME_NAME"*.kcache "$CACHE"/ksvg-elements 2>/dev/null || true
 command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 >/dev/null 2>&1 || true
 
+if [ $DOCK = 0 ] && [ $DOCK_REVERT = 0 ]; then
+    dock_refresh
+fi
 if [ -z "$APPLY" ] && { [ $PANELS = 1 ] || [ $DOCK = 1 ] || [ $DOCK_REVERT = 1 ]; }; then
     if [ $PANELS = 1 ]; then panels_update; fi
     if [ $DOCK_REVERT = 1 ]; then dock_revert; fi

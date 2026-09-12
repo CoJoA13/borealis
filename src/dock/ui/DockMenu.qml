@@ -102,6 +102,13 @@ Rectangle {
                     anchors.leftMargin: 10
                     anchors.rightMargin: 10
                     spacing: 8
+                    Text {
+                        visible: row.modelData.check !== undefined
+                        text: row.modelData.check === true ? "✓" : ""
+                        Layout.preferredWidth: 14
+                        color: row.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
+                        font.pointSize: Kirigami.Theme.defaultFont.pointSize
+                    }
                     Kirigami.Icon {
                         visible: !!row.modelData.icon
                         source: row.modelData.icon || ""
@@ -113,7 +120,7 @@ Rectangle {
                         Layout.fillWidth: true
                         text: row.modelData.text || ""
                         elide: Text.ElideRight
-                        font.bold: row.header || row.modelData.check === true
+                        font.bold: row.modelData.type === "window" && row.modelData.check === true
                         font.pointSize: Kirigami.Theme.defaultFont.pointSize
                         color: row.highlighted ? Kirigami.Theme.highlightedTextColor
                             : (!row.usable || row.header || row.modelData.dim === true)

@@ -33,8 +33,14 @@ DEFAULTS = {
     "divider": True,
     "showTrash": True,
     "animation": 1.0,            # speed factor; 0 = no animation
-    "clickAction": "cycle",      # clicking the front app: cycle | minimize
+    "clickAction": "expose",     # the front app, clicked: expose (its windows) | cycle | minimize
+    "badges": True,              # counts and progress apps publish for their icon
+    "shortcuts": True,           # Meta+1…9 open the dock's first nine apps
+    # folders shown as Stacks, before the trash
+    "stacks": [{"path": "xdg:download", "view": "auto", "sort": "added", "display": "stack"}],
 }
+STACK_CHOICES = {"view": ("auto", "fan", "grid"), "sort": ("added", "modified", "name"),
+                 "display": ("stack", "folder")}
 RANGES = {
     "iconSize": (16, 256), "zoom": (1.0, 3.0), "zoomLast": (1.05, 3.0), "reach": (1.0, 8.0),
     "spacing": (0, 48), "padding": (4, 32), "margin": (0, 64), "radius": (0, 64),
@@ -43,7 +49,7 @@ RANGES = {
 CHOICES = {
     "position": ("bottom", "left", "right"), "screen": ("primary", "all", "follow"),
     "hide": ("always", "dodge", "auto"), "indicator": ("dot", "line", "none"),
-    "clickAction": ("cycle", "minimize"),
+    "clickAction": ("expose", "cycle", "minimize"),
 }
 
 
@@ -70,6 +76,18 @@ def sanitize(data):
     for key, default in DEFAULTS.items():
         if type(default) is bool:
             out[key] = bool(out[key])
+    stacks, seen = [], set()
+    for stack in out["stacks"] if isinstance(out["stacks"], list) else DEFAULTS["stacks"]:
+        if not isinstance(stack, dict) or not isinstance(stack.get("path"), str) or not stack["path"]:
+            continue
+        if stack["path"] in seen:
+            continue
+        seen.add(stack["path"])
+        clean = {"path": stack["path"]}
+        for key, allowed in STACK_CHOICES.items():
+            clean[key] = stack.get(key) if stack.get(key) in allowed else allowed[0]
+        stacks.append(clean)
+    out["stacks"] = stacks
     pinned = out["pinned"] if isinstance(out["pinned"], list) else DEFAULTS["pinned"]
     out["pinned"] = [p for p in pinned if isinstance(p, str) and p]
     out["schema"] = SCHEMA

@@ -321,6 +321,70 @@ json.dump(d, open(p + ".tmp", "w")); os.replace(p + ".tmp", p)' "$SDOCK_SLUG" "$
         tap "move:40,$LY"; sleep 1
         shot sdock-left-hover
         tap "move:$(( SCREEN_W / 2 )),300"; sleep 0.5
+
+        # ---- badges, Exposé, Meta+N, Stacks --------------------------------
+        settle '{"position": "bottom", "hide": "always"}'
+        sleep 3
+        # an app publishing a count and progress; it stays on the bus, as apps do
+        # (the dock forgets what a sender published once it leaves)
+        python3 -c 'import time
+from PySide6.QtCore import QCoreApplication
+from PySide6.QtDBus import QDBusConnection, QDBusMessage
+app = QCoreApplication([])
+msg = QDBusMessage.createSignal("/com/canonical/unity/launcherentry/1", "com.canonical.Unity.LauncherEntry", "Update")
+msg.setArguments(["application://org.kde.dolphin.desktop",
+                  {"count": 3, "count-visible": True, "progress": 0.6, "progress-visible": True}])
+print("emitted:", QDBusConnection.sessionBus().send(msg), flush=True)
+time.sleep(60)' >> "$SANDBOX/sdock-input.log" 2>&1 &
+        EMITTER=$!
+        sleep 2
+        layout badges
+        shot sdock-badges
+        # a second Dolphin window comes to the front; clicking Dolphin spreads both
+        dolphin --new-window "$HOME/Documents" >/dev/null 2>&1 &
+        S3=$!
+        sleep 5
+        layout two-windows
+        DX=$(at_of two-windows "$SCREEN_W" org.kde.dolphin)
+        tap "click:$DX,$Y"; sleep 2
+        shot sdock-expose
+        tap ff1b; sleep 1.5
+        # Meta+2: the second app in the dock
+        SECOND=$(python3 -c 'import json, sys
+rows = [r["appId"] for r in json.load(open(sys.argv[1]))["rows"] if r["kind"] == "app"]
+print(rows[1] if len(rows) > 1 else "")' "$SANDBOX/sdock-two-windows.json")
+        echo "second app: $SECOND" >> "$SANDBOX/sdock-input.log"
+        grep "activate task manager entry 2=" "$XDG_CONFIG_HOME/kglobalshortcutsrc" >> "$SANDBOX/sdock-input.log" 2>&1
+        tap "chord:ffeb+0032"; sleep 3
+        layout meta2
+        # Stacks: the Downloads folder, fanned out, then as a grid
+        mkdir -p "$HOME/Downloads"
+        for i in 1 2 3 4 5; do
+            python3 -c "from PIL import Image; Image.new('RGB', (96, 64), ($(( 40 * i )), 150, 220)).save('$HOME/Downloads/photo-$i.png')"
+            sleep 0.1
+        done
+        echo "notes" > "$HOME/Downloads/notes.txt"
+        sleep 2
+        layout stacks
+        SX=$(at_of stacks "$SCREEN_W" stack)
+        tap "move:$(( SX - 30 )),$Y"; sleep 0.3
+        tap "click:$SX,$Y"; sleep 2
+        shot sdock-stack-fan
+        tap "click:200,300"; sleep 1
+        for i in 1 2 3 4 5 6 7 8 9 10; do echo x > "$HOME/Downloads/file-$i.txt"; done
+        sleep 2
+        tap "move:$(( SX - 30 )),$Y"; sleep 0.3
+        tap "click:$SX,$Y"; sleep 2
+        shot sdock-stack-grid
+        tap "click:200,300"; sleep 1
+        stop "$S3" "$EMITTER"
+        # the dock's page in Borealis Tweaks
+        "$XDG_DATA_HOME"/*-tweaks/main.py --page dock > "$SANDBOX/sdock-tweaks.log" 2>&1 &
+        TW=$!
+        sleep 7
+        shot sdock-tweaks
+        stop "$TW"
+        sleep 1
     fi
     sd Quit >/dev/null
     sleep 1
@@ -479,6 +543,15 @@ elif arg.startswith(("down:", "up:")):          # down:X,Y / up:X,Y — press or
     time.sleep(0.05)
     t.XTestFakeButtonEvent(d, 1, 1 if arg.startswith("down:") else 0, 0); x.XFlush(d)
     print(arg.split(":")[0], cx, cy, "on", disp)
+elif arg.startswith("chord:"):                 # chord:ffeb+0032 — hold the first keys, tap the last
+    codes = [x.XKeysymToKeycode(d, int(k, 16)) for k in arg.split(":")[1].split("+")]
+    for code in codes:
+        t.XTestFakeKeyEvent(d, code, 1, 0); x.XFlush(d)
+        time.sleep(0.06)
+    for code in reversed(codes):
+        t.XTestFakeKeyEvent(d, code, 0, 0); x.XFlush(d)
+        time.sleep(0.06)
+    print("chord", arg.split(":")[1], "on", disp)
 elif arg.startswith("click:"):                 # click:X,Y — focus a window, then wake it
     cx, cy = (int(v) for v in arg.split(":")[1].split(","))
     t.XTestFakeMotionEvent(d, 0, cx, cy, 0); x.XFlush(d)

@@ -15,6 +15,7 @@ from tokens import AUTHOR, EMAIL, IDS, NAME, SLUG, VERSION  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCE_BUS = "org.borealis.Dock"
 SOURCE_SHORTCUT = "Borealis Dock: sync"
+SOURCE_SLOT_SHORTCUT = "Borealis Dock: activate app "
 
 
 def shortcut():
@@ -95,7 +96,8 @@ def bridge(out_root):
     text = open(qml).read()
     text = (text.replace(f'"{SOURCE_BUS}1"', f'"{IDS["dockbus"]}1"')
                 .replace(f'"{SOURCE_BUS}"', f'"{IDS["dockbus"]}"')
-                .replace(f'"{SOURCE_SHORTCUT}"', f'"{shortcut()}"'))
+                .replace(f'"{SOURCE_SHORTCUT}"', f'"{shortcut()}"')
+                .replace(f'"{SOURCE_SLOT_SHORTCUT}"', f'"{NAME} Dock: activate app "'))
     with open(qml, "w") as f:
         f.write(text)
     return dest

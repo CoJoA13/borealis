@@ -195,11 +195,28 @@ under the pointer staying put while its neighbours make room.
   auto-hide; push the pointer against the screen edge to bring it back.
   Bottom, left or right edge; primary screen, every screen, or the one with
   the pointer.
+- Click the app in front when it has several windows and they spread out
+  (KWin's Window View) so you can pick one; "Show All Windows" in its menu does
+  the same.
+- Badges and progress: unread counts and download or copy progress that apps
+  publish for their launcher icon (the Unity LauncherEntry API) appear on the
+  icon.
+- Meta+1…9 open or switch to the dock's first nine apps. Plasma keeps those
+  keys for a task manager even when there is none, so the dock sets Plasma's
+  to "none" while its own are on, and hands them back when you turn them off.
+- Stacks: folders next to the trash (Downloads to begin with) show their
+  newest files piled on the icon. Click to fan them out, or see a grid when
+  there are more; click a file to open it, drag it out to use it elsewhere.
+  Right-click a stack to sort it, choose fan or grid, or show the plain folder
+  icon; drop any folder on the dock to add it.
 
-Settings live in `~/.config/borealis/dock.json` and apply the moment the file
-changes: `position`, `screen`, `iconSize`, `zoom`, `reach`, `spacing`,
-`padding`, `margin`, `radius`, `opacity`, `blur`, `hide`, `hideDelay`,
-`indicator`, `labels`, `bounce`, `divider`, `showTrash`, `animation`, `pinned`.
+Everything is on the **Dock** page of Borealis Tweaks (right-click the shelf
+→ Dock Settings… opens it), and applies as you change it. The page writes
+`~/.config/borealis/dock.json`, which the dock watches, so hand edits work too:
+`position`, `screen`, `iconSize`, `zoom`, `reach`, `spacing`, `padding`,
+`margin`, `radius`, `opacity`, `blur`, `border`, `hide`, `hideDelay`,
+`indicator`, `labels`, `bounce`, `divider`, `showTrash`, `animation`,
+`clickAction`, `badges`, `shortcuts`, `stacks`, `pinned`.
 
 How it fits together: KWin shares its window list only with plasmashell, so a
 tiny KWin script (the "Borealis Dock bridge", enabled by `--dock`) reports the

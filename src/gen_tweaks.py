@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from tokens import IDS, NAME, SLUG  # noqa: E402
+from gen_dock import ids_py  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP_ID = f"org.{SLUG.lower()}.tweaks"
@@ -28,6 +29,12 @@ Keywords=theme;colour;color;accent;wallpaper;aurora;{NAME};
 StartupNotify=true
 X-KDE-StartupNotify=true
 X-Borealis-App={SLUG.lower()}-tweaks
+Actions=dock;
+
+[Desktop Action dock]
+Name=Dock Settings
+Icon=configure
+Exec=@EXEC@ --page dock
 """
 
 
@@ -38,6 +45,11 @@ def build(out_root):
     shutil.copytree(os.path.join(HERE, "tweaks"), app,
                     ignore=shutil.ignore_patterns("__pycache__"))
     os.chmod(os.path.join(app, "main.py"), 0o755)
+    # the Dock page edits the dock's settings with the dock's own code
+    shutil.copy(os.path.join(HERE, "dock", "settings.py"), os.path.join(app, "docksettings.py"))
+    shutil.copy(os.path.join(HERE, "dock", "stacks.py"), os.path.join(app, "dockstacks.py"))
+    with open(os.path.join(app, "ids.py"), "w") as f:
+        f.write(ids_py())
     apps = os.path.join(out_root, "applications")
     os.makedirs(apps, exist_ok=True)
     with open(os.path.join(apps, f"{APP_ID}.desktop"), "w") as f:

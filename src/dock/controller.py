@@ -4,10 +4,12 @@ import shutil
 
 from PySide6.QtCore import (Property, QFileSystemWatcher, QObject, QProcess, QRectF, QTimer,
                             QUrl, Signal, Slot)
+from PySide6.QtDBus import QDBusConnection, QDBusMessage
 from PySide6.QtGui import QRegion
 
 import effects
 import ids
+import stacks as stackfolders
 
 
 def _data_home():
@@ -21,11 +23,14 @@ class Controller(QObject):
     menuOpenChanged = Signal()
     bridgeAliveChanged = Signal()
     menuRequested = Signal("QVariantList", int, QObject, float, float, float, float, str)
+    # entries, title, folder, view, row, screen, x, y, w, h, edge
+    stackRequested = Signal("QVariantList", str, str, str, int, QObject, float, float, float, float, str)
     testMenuRequested = Signal(int)
 
-    def __init__(self, app, settings, apps, bridge, model, parent=None):
+    def __init__(self, app, settings, apps, bridge, model, stacks=None, parent=None):
         super().__init__(parent)
-        self.app, self.apps, self.bridge = app, apps, bridge
+        self.app, self.apps, self.bridge, self.stacks = app, apps, bridge, stacks
+        self._shortcuts = None
         self._settings_obj, self._model_obj = settings, model
         self._revision = 0
         self._menu_open = False
@@ -64,7 +69,28 @@ class Controller(QObject):
     def _layout_key(self):
         return (self.settings.get("position"), self.settings.get("screen"))
 
+    def push_config(self):
+        """What the KWin bridge needs to know: whether to hold Meta+1…9."""
+        self._shortcuts = bool(self.settings.get("shortcuts"))
+        self.claim_task_manager_keys(self._shortcuts)
+        self.bridge.send("config", shortcuts=self._shortcuts)
+
+    @staticmethod
+    def claim_task_manager_keys(claim):
+        """plasmashell registers Meta+1…9 for a task manager whether or not one
+        exists, and a key held twice goes to the first owner. Setting those to
+        "none" is a user choice Plasma keeps across restarts; turning the dock's
+        shortcuts off hands the keys back."""
+        for n in range(1, 11):
+            action = [f"activate task manager entry {n}", f"Activate Task Manager Entry {n}"]
+            keys = ["0"] if claim or n == 10 else ["1", "1", str(0x10000000 | (0x30 + n))]
+            QProcess.startDetached("busctl", ["--user", "call", "org.kde.kglobalaccel", "/kglobalaccel",
+                                              "org.kde.KGlobalAccel", "setForeignShortcutKeys", "asa(ai)",
+                                              "4", "plasmashell", action[0], "plasmashell", action[1]] + keys)
+
     def _settings_changed(self):
+        if bool(self.settings.get("shortcuts")) != self._shortcuts:
+            self.push_config()
         key = self._layout_key()
         if key != self._layout:
             self._layout = key
@@ -142,13 +168,58 @@ class Controller(QObject):
         if not active:
             # bring the app forward: its most recently used window
             return self.bridge.send("activate", id=windows[-1]["id"])
-        if len(windows) == 1 or self.settings.get("clickAction") == "minimize":
+        action = self.settings.get("clickAction")
+        if len(windows) > 1 and action == "expose":
+            return self.expose([w["id"] for w in windows])
+        if len(windows) == 1 or action == "minimize":
             for w in windows:
                 if not w.get("minimized"):
                     self.bridge.send("minimize", id=w["id"])
             return
         # several windows and one in front: step to the one used longest ago
         self.bridge.send("activate", id=windows[0]["id"])
+
+    def expose(self, window_ids):
+        """App Exposé: KWin's Window View with just these windows."""
+        msg = QDBusMessage.createMethodCall("org.kde.KWin.Effect.WindowView1", "/org/kde/KWin/Effect/WindowView1",
+                                            "org.kde.KWin.Effect.WindowView1", "activate")
+        msg.setArguments([list(window_ids)])
+        QDBusConnection.sessionBus().asyncCall(msg)
+
+    @Slot(int)
+    def activateSlot(self, number):
+        """Meta+1…9: the dock's apps in order, dividers and folders skipped."""
+        if not self.settings.get("shortcuts"):
+            return
+        rows = [row for row, it in enumerate(self.model.items) if it["kind"] == "app"]
+        if 1 <= number <= len(rows):
+            self.click(rows[number - 1])
+
+    @Slot(str)
+    def openUrl(self, url):
+        QProcess.startDetached("kioclient", ["exec", url])
+
+    @Slot(str)
+    def openStackFolder(self, path):
+        QProcess.startDetached("kioclient", ["exec", QUrl.fromLocalFile(stackfolders.resolve(path)).toString()])
+
+    def _stack_settings(self, path):
+        return next((st for st in self.settings.get("stacks") if st["path"] == path),
+                    {"path": path, "view": "auto", "sort": "added", "display": "stack"})
+
+    def _edit_stacks(self, change):
+        self.settings.set("stacks", change([dict(st) for st in self.settings.get("stacks")]))
+
+    @Slot(int, QObject, float, float, float, float, str)
+    def requestStack(self, row, window, x, y, w, h, edge):
+        it = self.model.item(row)
+        if not it or it["kind"] != "stack" or self.stacks is None:
+            return
+        cfg = self._stack_settings(it["stackPath"])
+        entries = self.stacks.entries(it["stackPath"], cfg["sort"])
+        screen = window.screen() if hasattr(window, "screen") else self.app.primaryScreen()
+        self._last_menu = (row, screen, x, y, w, h, edge)
+        self.stackRequested.emit(entries, it["name"], it["stackPath"], cfg["view"], row, screen, x, y, w, h, edge)
 
     @Slot(int)
     def middleClick(self, row):
@@ -209,10 +280,18 @@ class Controller(QObject):
         urls = [u.toString() if isinstance(u, QUrl) else str(u) for u in urls]
         entries = [u for u in urls if u.endswith(".desktop") or u.startswith("applications:")]
         it = self.model.item(row)
+        folders = [QUrl(u).toLocalFile() for u in urls
+                   if QUrl(u).isLocalFile() and os.path.isdir(QUrl(u).toLocalFile())]
         if it and it["kind"] == "trash":
             self.trashUrls(urls)
         elif it and it["kind"] == "app" and not entries:
             self._launch(it, urls)
+        elif folders and not entries:
+            # a folder dropped on the dock becomes a Stack
+            known = {stackfolders.resolve(st["path"]) for st in self.settings.get("stacks")}
+            added = [{"path": f} for f in folders if os.path.abspath(f) not in known]
+            if added:
+                self.settings.set("stacks", self.settings.get("stacks") + added)
         else:
             pinned_rows = sum(1 for x in self.model.items if x.get("pinned"))
             for u in entries:
@@ -244,6 +323,26 @@ class Controller(QObject):
                 {"type": "separator"},
                 {"type": "command", "key": "settings", "icon": "configure", "text": "Dock Settings…"},
             ]
+        if it["kind"] == "stack":
+            cfg = self._stack_settings(it["stackPath"])
+
+            def choice(field, value, text):
+                return {"type": "command", "key": f"stack-{field}:{value}", "text": text, "check": cfg[field] == value}
+            return [
+                {"type": "command", "key": "stack-open", "icon": "document-open-folder", "text": f"Open “{it['name']}”"},
+                {"type": "separator"},
+                {"type": "header", "text": "Sort by"},
+                choice("sort", "added", "Date Added"), choice("sort", "modified", "Date Modified"),
+                choice("sort", "name", "Name"),
+                {"type": "separator"},
+                {"type": "header", "text": "View as"},
+                choice("view", "auto", "Automatic"), choice("view", "fan", "Fan"), choice("view", "grid", "Grid"),
+                {"type": "separator"},
+                {"type": "header", "text": "Display as"},
+                choice("display", "stack", "Stack"), choice("display", "folder", "Folder"),
+                {"type": "separator"},
+                {"type": "command", "key": "stack-remove", "icon": "list-remove", "text": "Remove from Dock"},
+            ]
         if it["kind"] == "trash":
             return [
                 {"type": "command", "key": "trash-open", "icon": "document-open-folder", "text": "Open"},
@@ -257,6 +356,9 @@ class Controller(QObject):
                 entries.append({"type": "window", "key": "window:" + w["id"],
                                 "text": w.get("caption") or it["name"], "check": bool(w.get("active")),
                                 "dim": bool(w.get("minimized"))})
+            if len(it["windows"]) > 1:
+                entries.append({"type": "command", "key": "expose", "icon": "window-duplicate",
+                                "text": "Show All Windows"})
             entries.append({"type": "separator"})
         entry = self.apps.get(it["appId"])
         if entry and entry.actions:
@@ -296,6 +398,16 @@ class Controller(QObject):
             QTimer.singleShot(0, lambda: self.menuRequested.emit(confirm, row, screen, x, y, w, h, edge))
         elif key == "trash-empty-confirm":
             self.emptyTrash()
+        elif it and it["kind"] == "stack" and key.startswith("stack-"):
+            path = it["stackPath"]
+            if key == "stack-open":
+                self.openStackFolder(path)
+            elif key == "stack-remove":
+                self._edit_stacks(lambda sts: [st for st in sts if st["path"] != path])
+            elif ":" in key:
+                field, value = key[len("stack-"):].split(":", 1)
+                self._edit_stacks(lambda sts: [dict(st, **{field: value}) if st["path"] == path else st
+                                               for st in sts])
         elif it and it["kind"] == "app":
             if key.startswith("window:"):
                 self.bridge.send("activate", id=key[len("window:"):])
@@ -310,6 +422,8 @@ class Controller(QObject):
             elif key == "quit":
                 for w in it["windows"]:
                     self.bridge.send("close", id=w["id"])
+            elif key == "expose":
+                self.expose([w["id"] for w in it["windows"]])
 
     # --- trash and settings actions -----------------------------------------
     @Slot()
@@ -328,7 +442,8 @@ class Controller(QObject):
 
     @Slot()
     def openSettings(self):
-        if not self.apps.launch(ids.TWEAKS_ID):
+        # straight to the Dock page (a desktop action of Tweaks' entry), else Tweaks as is
+        if not (self.apps.launch(ids.TWEAKS_ID, action="dock") or self.apps.launch(ids.TWEAKS_ID)):
             print("dock: Borealis Tweaks isn't installed", flush=True)
 
     # --- where windows are (for hiding) --------------------------------------

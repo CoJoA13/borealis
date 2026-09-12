@@ -8,12 +8,15 @@ from PySide6.QtCore import Property, QAbstractListModel, QByteArray, QModelIndex
 from PySide6.QtGui import QIcon
 
 from apps import FALLBACK_ICON
+from stacks import folder_icon, resolve as resolve_stack
 
 ROLES = ("kind", "key", "appId", "name", "icon", "pinned", "windows", "windowCount",
-         "active", "attention", "launching", "hasEntry")
+         "active", "attention", "launching", "hasEntry", "badge", "progress",
+         "stackPath", "stackCount", "preview", "display")
 DEFAULTS = {"kind": "", "key": "", "appId": "", "name": "", "icon": "", "pinned": False,
             "windows": [], "windowCount": 0, "active": False, "attention": False,
-            "launching": False, "hasEntry": False}
+            "launching": False, "hasEntry": False, "badge": 0, "progress": -1.0,
+            "stackPath": "", "stackCount": 0, "preview": [], "display": ""}
 LAUNCH_TIMEOUT = 12.0
 
 
@@ -21,9 +24,10 @@ class DockModel(QAbstractListModel):
     offsetsChanged = Signal()
     countChanged = Signal()
 
-    def __init__(self, settings, apps, bridge, parent=None):
+    def __init__(self, settings, apps, bridge, badges=None, stacks=None, parent=None):
         super().__init__(parent)
         self.settings, self.apps, self.bridge = settings, apps, bridge
+        self.badges, self.stacks = badges, stacks
         self.items = []
         self.pins = []                 # [(spec as saved, resolved entry id)]
         self._preview = None           # pinned order while an icon is being dragged
@@ -37,6 +41,10 @@ class DockModel(QAbstractListModel):
         settings.changed.connect(self.rebuild)
         apps.changed.connect(self.rebuild)
         bridge.windowsChanged.connect(self.rebuild)
+        if badges is not None:
+            badges.changed.connect(self.rebuild)
+        if stacks is not None:
+            stacks.changed.connect(self.rebuild)
         self.rebuild()
 
     # --- Qt model ---------------------------------------------------------
@@ -121,11 +129,14 @@ class DockModel(QAbstractListModel):
             else:
                 launching = True
         name = entry.name if entry else (windows[-1].get("caption") if windows else entry_id)
+        count, progress, urgent = (self.badges.get(entry_id)
+                                   if self.badges is not None and self.settings.get("badges")
+                                   else (0, -1.0, False))
         return {"kind": "app", "key": "app:" + entry_id, "appId": entry_id, "name": name or entry_id,
                 "icon": self._icon_for(entry, windows), "pinned": pinned, "windows": windows,
                 "windowCount": len(windows), "active": any(w.get("active") for w in windows),
-                "attention": any(w.get("attention") for w in windows), "launching": launching,
-                "hasEntry": entry is not None}
+                "attention": any(w.get("attention") for w in windows) or urgent, "launching": launching,
+                "hasEntry": entry is not None, "badge": count, "progress": progress}
 
     def _expire_launches(self):
         """Check again when the soonest launch runs out (a precise timer: coarse
@@ -153,10 +164,24 @@ class DockModel(QAbstractListModel):
             if divider:
                 items.append({"kind": "divider", "key": "divider:open"})
             items += opened
+        end = []
+        stacks = self.settings.get("stacks") if self.stacks is not None else []
+        if self.stacks is not None:
+            self.stacks.watch([st["path"] for st in stacks])
+        for st in stacks:
+            entries = self.stacks.entries(st["path"], st["sort"])
+            real = resolve_stack(st["path"])
+            end.append({"kind": "stack", "key": "stack:" + st["path"],
+                        "name": os.path.basename(real.rstrip("/")) or real, "icon": folder_icon(st["path"]),
+                        "stackPath": st["path"], "stackCount": len(entries), "display": st["display"],
+                        "preview": [{"icon": e["icon"], "url": e["url"], "image": e["image"]}
+                                    for e in entries[:3]]})
         if self.settings.get("showTrash"):
+            end.append({"kind": "trash", "key": "trash", "name": "Trash", "icon": "user-trash"})
+        if end:
             if divider:
                 items.append({"kind": "divider", "key": "divider:end"})
-            items.append({"kind": "trash", "key": "trash", "name": "Trash", "icon": "user-trash"})
+            items += end
         self._offsets_for(items)
         self._apply(items)
         self._expire_launches()

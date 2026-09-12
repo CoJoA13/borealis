@@ -16,6 +16,12 @@ Window {
     property int row: -1
     property rect anchorRect: Qt.rect(0, 0, 0, 0)
     property string edge: "bottom"
+    property string mode: "menu"          // menu | stack
+    property var stackEntries: []
+    property string stackTitle: ""
+    property string stackPath: ""
+    property string stackView: "auto"
+    property bool dragging: false          // an item is being dragged out of a Stack
     property int commitTick: 0
 
     title: "Dock menu"
@@ -34,30 +40,52 @@ Window {
 
     function close() {
         visible = false;
+        dragging = false;
         dock.menuOpen = false;
+    }
+    function show(kind, screen, row, x, y, w, h, edge) {
+        overlay.visible = false;              // a fresh surface, on the right screen
+        overlay.targetScreen = screen;
+        overlay.mode = kind;
+        overlay.row = row;
+        overlay.anchorRect = Qt.rect(x, y, w, h);
+        overlay.edge = edge;
+        dock.menuOpen = true;
+        overlay.visible = true;
     }
     function clamp(v, lo, hi) {
         return Math.max(lo, Math.min(hi, v));
     }
     function pushSurface() {
-        if (visible) {
+        if (!visible) {
+            return;
+        }
+        if (mode === "stack") {
+            // while a file is dragged out, only the Stack takes input, so the
+            // drop can land on whatever is underneath
+            dock.updateSurface(overlay, dragging ? [stack.inputRect] : [], stack.blurRect, stack.blurRadius);
+        } else {
             dock.updateSurface(overlay, [], Qt.rect(menu.x, menu.y, menu.width, menu.height), menu.radius);
         }
     }
+    onDraggingChanged: Qt.callLater(pushSurface)
+    onModeChanged: Qt.callLater(pushSurface)
 
     Connections {
         target: dock
         function onMenuRequested(entries, row, screen, x, y, w, h, edge) {
-            overlay.visible = false;              // a fresh surface, on the right screen
-            overlay.targetScreen = screen;
             overlay.entries = entries;
-            overlay.row = row;
-            overlay.anchorRect = Qt.rect(x, y, w, h);
-            overlay.edge = edge;
             menu.currentIndex = -1;
-            dock.menuOpen = true;
-            overlay.visible = true;
+            overlay.show("menu", screen, row, x, y, w, h, edge);
             menu.forceActiveFocus();
+        }
+        function onStackRequested(entries, title, path, view, row, screen, x, y, w, h, edge) {
+            overlay.stackEntries = entries;
+            overlay.stackTitle = title;
+            overlay.stackPath = path;
+            overlay.stackView = view;
+            overlay.show("stack", screen, row, x, y, w, h, edge);
+            stack.forceActiveFocus();
         }
     }
 
@@ -69,8 +97,32 @@ Window {
         onPressed: overlay.close()
     }
 
+    StackPopup {
+        id: stack
+        anchors.fill: parent
+        visible: overlay.mode === "stack"
+        entries: overlay.stackEntries
+        title: overlay.stackTitle
+        view: overlay.stackView
+        edge: overlay.edge
+        anchorRect: overlay.anchorRect
+        onOpened: url => {
+            overlay.close();
+            dock.openUrl(url);
+        }
+        onOpenFolder: {
+            overlay.close();
+            dock.openStackFolder(overlay.stackPath);
+        }
+        onDismissed: overlay.close()
+        onDragStarted: overlay.dragging = true
+        onDragFinished: overlay.close()
+        onBlurRectChanged: Qt.callLater(overlay.pushSurface)
+    }
+
     DockMenu {
         id: menu
+        visible: overlay.mode === "menu"
         entries: overlay.entries
         x: overlay.clamp(overlay.edge === "bottom" ? overlay.anchorRect.x + overlay.anchorRect.width / 2 - width / 2
                          : overlay.edge === "left" ? overlay.anchorRect.x + overlay.anchorRect.width + 14

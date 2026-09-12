@@ -17,6 +17,8 @@ Item {
     readonly property string objectPath: "/Dock"
     readonly property string iface: "org.borealis.Dock1"
     readonly property string shortcutName: "Borealis Dock: sync"
+    readonly property string slotShortcut: "Borealis Dock: activate app "
+    property bool shortcutsEnabled: false   // Meta+1…9, when the dock asks for them
     property bool debug: false          // the dock turns this on when it runs with tracing
 
     function listed(w) {
@@ -70,6 +72,12 @@ Item {
             const c = commands[i];
             if (c.op === "resync") {
                 bridge.pushNow();
+                continue;
+            }
+            if (c.op === "config") {
+                if (c.shortcuts !== undefined) {
+                    bridge.shortcutsEnabled = c.shortcuts === true;
+                }
                 continue;
             }
             if (c.op === "debug") {
@@ -212,6 +220,30 @@ Item {
         path: bridge.objectPath
         dbusInterface: bridge.iface
         method: "Hello"
+    }
+
+    // Meta+1…9 open the dock's first nine apps (created only while wanted, so
+    // the keys stay free otherwise)
+    Instantiator {
+        model: bridge.shortcutsEnabled ? 9 : 0
+        delegate: KWin.ShortcutHandler {
+            required property int index
+            name: bridge.slotShortcut + (index + 1)
+            text: bridge.slotShortcut + (index + 1)
+            sequence: "Meta+" + (index + 1)
+            onActivated: {
+                slotCall.arguments = [index + 1];
+                slotCall.call();
+            }
+        }
+    }
+
+    KWin.DBusCall {
+        id: slotCall
+        service: bridge.service
+        path: bridge.objectPath
+        dbusInterface: bridge.iface
+        method: "ActivateSlot"
     }
 
     KWin.ShortcutHandler {
