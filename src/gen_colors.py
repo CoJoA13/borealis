@@ -3,7 +3,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from tokens import DARK, LIGHT, kde, mix  # noqa: E402
+from tokens import DARK, IDS, LIGHT, kde, mix  # noqa: E402
 
 KEYS = ("BackgroundAlternate", "BackgroundNormal", "DecorationFocus",
         "DecorationHover", "ForegroundActive", "ForegroundInactive",
@@ -87,7 +87,7 @@ def scheme(p):
         lines.append(f"[{name}]")
         lines += [f"{k}={kde(groups[name][k])}" for k in KEYS]
         lines.append("")
-    sid = "BorealisDark" if dark else "BorealisLight"
+    sid = IDS["colors_dark"] if dark else IDS["colors_light"]
     lines += [
         "[General]",
         f"ColorScheme={sid}",

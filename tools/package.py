@@ -15,33 +15,37 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHARE = os.path.join(HERE, "build", "share")
 DIST = os.path.join(HERE, "dist")
 sys.path.insert(0, os.path.join(HERE, "src"))
-from tokens import VERSION  # noqa: E402
+from tokens import IDS, SLUG, TITLES, VERSION  # noqa: E402
+
+D, L = IDS["lnf_dark"], IDS["lnf_light"]
 
 # archive name -> (store category, [paths relative to build/share])
 ARCHIVES = {
-    "Borealis-Dark-global-theme": ("Global Themes (Plasma 6)", ["plasma/look-and-feel/Borealis-Dark"]),
-    "Borealis-Light-global-theme": ("Global Themes (Plasma 6)", ["plasma/look-and-feel/Borealis-Light"]),
-    "Borealis-plasma-style": ("Plasma Themes", ["plasma/desktoptheme/Borealis"]),
-    "Borealis-color-schemes": ("Plasma Color Schemes", ["color-schemes/BorealisDark.colors",
-                                                        "color-schemes/BorealisLight.colors"]),
-    "Borealis-Dark-aurorae": ("Plasma Window Decorations", ["aurorae/themes/Borealis-Dark"]),
-    "Borealis-Light-aurorae": ("Plasma Window Decorations", ["aurorae/themes/Borealis-Light"]),
-    "Borealis-Snow-cursors": ("Cursors", ["icons/Borealis-Snow-Cursors"]),
-    "Borealis-Ink-cursors": ("Cursors", ["icons/Borealis-Ink-Cursors"]),
-    "Borealis-icons": ("Full Icon Themes", ["icons/Borealis-Dark", "icons/Borealis-Light"]),
-    "Borealis-wallpaper": ("Wallpapers KDE Plasma", ["wallpapers/Borealis", "wallpapers/Borealis-Lock"]),
-    "Borealis-Aurora-animated-wallpaper": ("Plasma 6 Wallpaper Plugins",
-                                           ["plasma/wallpapers/org.borealis.aurora"]),
-    "Borealis-sound-theme": ("System Sounds", ["sounds/Borealis"]),
-    "Borealis-konsole": ("Konsole Color Schemes", ["konsole/BorealisDark.colorscheme",
-                                                   "konsole/BorealisLight.colorscheme",
-                                                   "konsole/Borealis Dark.profile",
-                                                   "konsole/Borealis Light.profile"]),
-    "Borealis-kate": ("Kate/KWrite Color Schemes", ["org.kde.syntax-highlighting/themes/borealisdark.theme",
-                                                    "org.kde.syntax-highlighting/themes/borealislight.theme"]),
-    "Borealis-plymouth": ("Plymouth Themes", ["plymouth/themes/borealis"]),
-    "Borealis-gtk4": ("GTK4/libadwaita Themes", ["gtk/borealis"]),
-    "Borealis-terminal": ("Terminal / CLI", ["terminal/borealis"]),
+    f"{D}-global-theme": ("Global Themes (Plasma 6)", [f"plasma/look-and-feel/{D}"]),
+    f"{L}-global-theme": ("Global Themes (Plasma 6)", [f"plasma/look-and-feel/{L}"]),
+    f"{SLUG}-plasma-style": ("Plasma Themes", [f"plasma/desktoptheme/{IDS['style']}"]),
+    f"{SLUG}-color-schemes": ("Plasma Color Schemes", [f"color-schemes/{IDS['colors_dark']}.colors",
+                                                       f"color-schemes/{IDS['colors_light']}.colors"]),
+    f"{D}-aurorae": ("Plasma Window Decorations", [f"aurorae/themes/{IDS['aurorae_dark']}"]),
+    f"{L}-aurorae": ("Plasma Window Decorations", [f"aurorae/themes/{IDS['aurorae_light']}"]),
+    f"{SLUG}-Snow-cursors": ("Cursors", [f"icons/{IDS['cursors_dark']}"]),
+    f"{SLUG}-Ink-cursors": ("Cursors", [f"icons/{IDS['cursors_light']}"]),
+    f"{SLUG}-icons": ("Full Icon Themes", [f"icons/{IDS['icons_dark']}", f"icons/{IDS['icons_light']}"]),
+    f"{SLUG}-wallpaper": ("Wallpapers KDE Plasma", [f"wallpapers/{IDS['wallpaper']}",
+                                                     f"wallpapers/{IDS['wallpaper_lock']}"]),
+    f"{SLUG}-Aurora-animated-wallpaper": ("Plasma 6 Wallpaper Plugins",
+                                          [f"plasma/wallpapers/{IDS['live']}"]),
+    f"{SLUG}-sound-theme": ("System Sounds", [f"sounds/{IDS['sounds']}"]),
+    f"{SLUG}-konsole": ("Konsole Color Schemes", [f"konsole/{IDS['colors_dark']}.colorscheme",
+                                                   f"konsole/{IDS['colors_light']}.colorscheme",
+                                                   f"konsole/{TITLES['dark']}.profile",
+                                                   f"konsole/{TITLES['light']}.profile"]),
+    f"{SLUG}-kate": ("Kate/KWrite Color Schemes",
+                     [f"org.kde.syntax-highlighting/themes/{IDS['kate_dark']}.theme",
+                      f"org.kde.syntax-highlighting/themes/{IDS['kate_light']}.theme"]),
+    f"{SLUG}-plymouth": ("Plymouth Themes", [f"plymouth/themes/{IDS['plymouth']}"]),
+    f"{SLUG}-gtk4": ("GTK4/libadwaita Themes", [f"gtk/{SLUG.lower()}"]),
+    f"{SLUG}-terminal": ("Terminal / CLI", [f"terminal/{SLUG.lower()}"]),
 }
 
 
@@ -75,15 +79,15 @@ def main():
                 add(tar, rel)
         lines.append(f"{sha256(out)}  {os.path.basename(out)}  [{category}]")
     # complete release: sources, scripts, docs and the prebuilt tree
-    full = os.path.join(DIST, f"Borealis-{VERSION}-complete.tar.gz")
+    full = os.path.join(DIST, f"{SLUG}-{VERSION}-complete.tar.gz")
     with tarfile.open(full, "w:gz") as tar:
         for item in ("README.md", "STORE.md", "LICENSE", "build.py", "install.sh", "uninstall.sh",
                      "install-system.sh", "src", "tools", "docs"):
             p = os.path.join(HERE, item)
             if os.path.exists(p):
-                tar.add(p, arcname=f"Borealis-{VERSION}/{item}",
+                tar.add(p, arcname=f"{SLUG}-{VERSION}/{item}",
                         filter=lambda t: None if "__pycache__" in t.name else t)
-        tar.add(SHARE, arcname=f"Borealis-{VERSION}/build/share")
+        tar.add(SHARE, arcname=f"{SLUG}-{VERSION}/build/share")
     lines.append(f"{sha256(full)}  {os.path.basename(full)}  [complete release]")
     with open(os.path.join(DIST, "SHA256SUMS"), "w") as f:
         f.write("\n".join(lines) + "\n")

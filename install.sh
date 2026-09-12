@@ -12,6 +12,8 @@
 #   --live      use the animated Borealis Aurora wallpaper (desktop + lock screen)
 #   --gtk       Borealis colors for GTK4/libadwaita apps
 #   --terminal  Borealis for bat, tmux, git, ls, fzf and the bash prompt
+#   --from DIR  install a build from elsewhere (e.g. a remix built with
+#               ./build.py --accent … --name "Borealis Ember" --out DIR)
 #   --flatpak   ...for Flatpak apps too (implies --gtk; lets every Flatpak app
 #               read ~/.config/gtk-4.0, read-only)
 #
@@ -20,10 +22,9 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SRC="$HERE/build/share"
+SRC="${BOREALIS_SRC:-$HERE/build/share}"
 DEST="${XDG_DATA_HOME:-$HOME/.local/share}"
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}"
-GTKCSS="borealis-libadwaita.css"
 
 APPLY=""; LAYOUT=0; AUTO=0; KONSOLE=0; LIVE=0; GTK=0; FLATPAK=0; TERMINAL=0
 while [ $# -gt 0 ]; do
@@ -36,7 +37,8 @@ while [ $# -gt 0 ]; do
         --gtk) GTK=1; shift ;;
         --flatpak) GTK=1; FLATPAK=1; shift ;;
         --terminal) TERMINAL=1; shift ;;
-        -h|--help) sed -n '2,21p' "$0"; exit 0 ;;
+        --from) SRC="${2:-}"; shift 2 ;;
+        -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -50,32 +52,33 @@ if [ ! -d "$SRC" ]; then
     python3 "$HERE/build.py"
 fi
 
-# Every path Borealis owns, relative to ~/.local/share
-ITEMS=(
-    "plasma/look-and-feel/Borealis-Dark"
-    "plasma/look-and-feel/Borealis-Light"
-    "plasma/desktoptheme/Borealis"
-    "aurorae/themes/Borealis-Dark"
-    "aurorae/themes/Borealis-Light"
-    "color-schemes/BorealisDark.colors"
-    "color-schemes/BorealisLight.colors"
-    "icons/Borealis-Dark"
-    "icons/Borealis-Light"
-    "icons/Borealis-Snow-Cursors"
-    "icons/Borealis-Ink-Cursors"
-    "wallpapers/Borealis"
-    "wallpapers/Borealis-Lock"
-    "plasma/wallpapers/org.borealis.aurora"
-    "sounds/Borealis"
-    "konsole/BorealisDark.colorscheme"
-    "konsole/BorealisLight.colorscheme"
-    "konsole/Borealis Dark.profile"
-    "konsole/Borealis Light.profile"
-    "org.kde.syntax-highlighting/themes/borealisdark.theme"
-    "org.kde.syntax-highlighting/themes/borealislight.theme"
-)
+# Everything the build produced, discovered rather than hard-coded, so a remix
+# (./build.py --accent … --name "Borealis Ember") installs the same way.
+CATEGORIES=(plasma/look-and-feel plasma/desktoptheme plasma/wallpapers aurorae/themes
+            color-schemes icons wallpapers sounds konsole org.kde.syntax-highlighting/themes)
+ITEMS=()
+for cat in "${CATEGORIES[@]}"; do
+    [ -d "$SRC/$cat" ] || continue
+    for path in "$SRC/$cat"/*; do
+        [ -e "$path" ] && ITEMS+=("$cat/$(basename "$path")")
+    done
+done
+[ ${#ITEMS[@]} -gt 0 ] || { echo "nothing to install in $SRC — run ./build.py" >&2; exit 1; }
 
-echo "Installing Borealis into $DEST"
+# The theme's own names come from the build, not from this script
+THEME_DARK="$(basename "$(ls -d "$SRC"/plasma/look-and-feel/*-Dark 2>/dev/null | head -1)")"
+THEME_LIGHT="$(basename "$(ls -d "$SRC"/plasma/look-and-feel/*-Light 2>/dev/null | head -1)")"
+THEME_NAME="${THEME_DARK%-Dark}"
+LIVE_ID="$(basename "$(ls -d "$SRC"/plasma/wallpapers/* 2>/dev/null | head -1)")"
+SOUND_ID="$(basename "$(ls -d "$SRC"/sounds/* 2>/dev/null | head -1)")"
+GTKCSS="$(basename "$(ls "$SRC"/gtk/*/*-libadwaita.css 2>/dev/null | head -1)")"
+TERMSRC="$(ls -d "$SRC"/terminal/* 2>/dev/null | head -1)"
+meta_name() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["KPlugin"]["Name"])' "$1" 2>/dev/null; }
+TITLE_DARK="$(meta_name "$SRC/plasma/look-and-feel/$THEME_DARK/metadata.json")"
+TITLE_LIGHT="$(meta_name "$SRC/plasma/look-and-feel/$THEME_LIGHT/metadata.json")"
+: "${TITLE_DARK:=$THEME_DARK}" "${TITLE_LIGHT:=$THEME_LIGHT}"
+
+echo "Installing $THEME_NAME into $DEST"
 for item in "${ITEMS[@]}"; do
     [ -e "$SRC/$item" ] || { echo "  skip (not built): $item"; continue; }
     mkdir -p "$DEST/$(dirname "$item")"
@@ -84,20 +87,24 @@ for item in "${ITEMS[@]}"; do
     echo "  + $item"
 done
 
+# What we installed, for ./uninstall.sh --remove
+mkdir -p "$CONF/borealis"
+printf '%s\n' "${ITEMS[@]}" > "$CONF/borealis/installed.list"
+
 # Drop stale SVG caches so Plasma re-reads the style
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}"
-rm -f "$CACHE"/plasma_theme_Borealis*.kcache "$CACHE"/ksvg-elements 2>/dev/null || true
+rm -f "$CACHE"/plasma_theme_"$THEME_NAME"*.kcache "$CACHE"/ksvg-elements 2>/dev/null || true
 command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 >/dev/null 2>&1 || true
 
 if [ -z "$APPLY" ]; then
     echo
-    echo "Done. Pick 'Borealis Dark' or 'Borealis Light' in"
+    echo "Done. Pick '$TITLE_DARK' or '$TITLE_LIGHT' in"
     echo "System Settings › Colors & Themes › Global Theme  (or run ./install.sh --apply dark)."
     exit 0
 fi
 
-PKG="Borealis-Dark"; PROFILE="Borealis Dark.profile"
-[ "$APPLY" = light ] && { PKG="Borealis-Light"; PROFILE="Borealis Light.profile"; }
+PKG="$THEME_DARK"; PROFILE="$TITLE_DARK.profile"
+[ "$APPLY" = light ] && { PKG="$THEME_LIGHT"; PROFILE="$TITLE_LIGHT.profile"; }
 
 # --- back up everything we may touch -------------------------------------
 BACKUP="$HOME/.local/state/borealis-backup/$(date +%Y%m%d-%H%M%S)"
@@ -129,27 +136,27 @@ if [ $LAYOUT = 1 ]; then
 else
     lookandfeeltool --apply "$PKG" "${KEEP_AUTO[@]}"
     # a Global Theme only *defaults* the wallpaper; set it explicitly
-    plasma-apply-wallpaperimage "$DEST/wallpapers/Borealis" >/dev/null 2>&1 || true
+    plasma-apply-wallpaperimage "$DEST/wallpapers/$THEME_NAME" >/dev/null 2>&1 || true
 fi
 # Fedora pins the lock screen to its own wallpaper; point it at Borealis
 kwriteconfig6 --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image \
-    --group General --key Image "file://$DEST/wallpapers/Borealis-Lock/"
+    --group General --key Image "file://$DEST/wallpapers/$THEME_NAME-Lock/"
 if [ $KONSOLE = 1 ]; then
     kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile "$PROFILE"
 fi
 # Global Themes can't set the sound theme; do it here
-kwriteconfig6 --file kdeglobals --group Sounds --key Theme Borealis
+kwriteconfig6 --file kdeglobals --group Sounds --key Theme "$SOUND_ID"
 if [ $LIVE = 1 ]; then
     qdbus-qt6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \
-        'var d = desktops(); for (var i = 0; i < d.length; i++) { d[i].wallpaperPlugin = "org.borealis.aurora"; }' \
-        >/dev/null 2>&1 || echo "  (couldn't reach plasmashell; pick 'Borealis Aurora' under Configure Desktop › Wallpaper)"
-    kwriteconfig6 --file kscreenlockerrc --group Greeter --key WallpaperPlugin org.borealis.aurora
+        "var d = desktops(); for (var i = 0; i < d.length; i++) { d[i].wallpaperPlugin = '$LIVE_ID'; }" \
+        >/dev/null 2>&1 || echo "  (couldn't reach plasmashell; pick the '$THEME_NAME' animated wallpaper under Configure Desktop › Wallpaper)"
+    kwriteconfig6 --file kscreenlockerrc --group Greeter --key WallpaperPlugin "$LIVE_ID"
 fi
 if [ $TERMINAL = 1 ]; then
     TERMDIR="$CONF/borealis/terminal"
     mkdir -p "$TERMDIR" "$CONF/bat/themes"
-    cp "$SRC/terminal/borealis/"* "$TERMDIR/"
-    cp "$SRC/terminal/borealis/"*.tmTheme "$CONF/bat/themes/"
+    cp "$TERMSRC/"* "$TERMDIR/"
+    cp "$TERMSRC/"*.tmTheme "$CONF/bat/themes/"
     command -v bat >/dev/null && bat cache --build >/dev/null 2>&1 || true
     LINE="source $TERMDIR/borealis-$APPLY.bash"
     if ! grep -qxF "$LINE" "$HOME/.bashrc" 2>/dev/null; then
@@ -159,7 +166,7 @@ if [ $TERMINAL = 1 ]; then
 fi
 if [ $GTK = 1 ]; then
     # our own file + one import line; KDE rewrites gtk.css but keeps extra lines
-    install -Dm644 "$SRC/gtk/borealis/$GTKCSS" "$CONF/gtk-4.0/$GTKCSS"
+    install -Dm644 "$(ls "$SRC"/gtk/*/"$GTKCSS")" "$CONF/gtk-4.0/$GTKCSS"
     grep -qxF "@import '$GTKCSS';" "$CONF/gtk-4.0/gtk.css" 2>/dev/null || \
         printf "\n@import '%s';\n" "$GTKCSS" >> "$CONF/gtk-4.0/gtk.css"
     echo "  GTK4 apps pick up the Borealis colors when they next start."

@@ -101,6 +101,7 @@ WallpaperItem {
         property real time
         property real intensity: root.configuration.Intensity / 100
         property real dawn: root.night ? 0.0 : 1.0
+        property real hueShift: 0.0      // a remix rotates the aurora here
         fragmentShader: Qt.resolvedUrl("../shaders/aurora.frag.qsb")
         // the aurora is soft; rendering it at half size keeps the GPU cool
         layer.enabled: true

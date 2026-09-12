@@ -15,6 +15,9 @@ import sys
 import tempfile
 import wave
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from tokens import IDS, NAME  # noqa: E402
+
 SR = 48000
 
 # E major pentatonic, a few octaves
@@ -266,7 +269,7 @@ def write_wav(path, left, right):
 
 
 def build(out_root):
-    base = os.path.join(out_root, "sounds", "Borealis")
+    base = os.path.join(out_root, "sounds", IDS["sounds"])
     if os.path.exists(base):
         shutil.rmtree(base)
     stereo_dir = os.path.join(base, "stereo")
@@ -293,8 +296,8 @@ def build(out_root):
                 done[key] = (dst, "wav")
     with open(os.path.join(base, "index.theme"), "w") as f:
         f.write("[Sound Theme]\n"
-                "Name=Borealis\n"
-                "Comment=Soft glassy chimes from the Borealis theme\n"
+                f"Name={NAME}\n"
+                f"Comment=Soft glassy chimes from the {NAME} theme\n"
                 "Inherits=ocean,freedesktop\n"
                 "Directories=stereo\n\n"
                 "[stereo]\nOutputProfile=stereo\n")

@@ -12,6 +12,7 @@ import cairo
 from PIL import Image, ImageChops, ImageEnhance, ImageFilter
 
 sys.path.insert(0, os.path.dirname(__file__))
+from tokens import IDS, NAME, remix as C  # noqa: E402
 from tokens import rgbf  # noqa: E402
 
 W, H = 3840, 2400
@@ -90,11 +91,16 @@ def scaled(img, k):
     return ImageEnhance.Brightness(img).enhance(k)
 
 
-def add_grain(img, sigma=22, strength=5):
-    """Signed dither noise (+/- a few levels) to kill gradient banding."""
-    noise = Image.effect_noise(img.size, sigma)
-    pos = noise.point(lambda v: max(0, v - 128) * strength // 64)
-    neg = noise.point(lambda v: max(0, 128 - v) * strength // 64)
+def add_grain(img, sigma=22, strength=5, seed=97):
+    """Signed dither noise (+/- a few levels) to kill gradient banding.
+
+    Seeded on purpose: PIL's own effect_noise() is not, which would make every
+    build produce slightly different wallpapers."""
+    w, h = img.size
+    noise = Image.frombytes("L", img.size, random.Random(seed).randbytes(w * h))
+    # uniform noise spread to match the old gaussian sigma at the same strength
+    pos = noise.point(lambda v: max(0, v - 128) * strength // 232)
+    neg = noise.point(lambda v: max(0, 128 - v) * strength // 232)
     pos = Image.merge("RGB", (pos, pos, pos))
     neg = Image.merge("RGB", (neg, neg, neg))
     return ImageChops.subtract(ImageChops.add(img, pos), neg)
@@ -220,16 +226,16 @@ def night_sky():
     sky = cairo.ImageSurface(cairo.FORMAT_RGB24, W, H)
     c = cairo.Context(sky)
     g = cairo.LinearGradient(0, 0, 0, H)
-    for off, col in ((0.0, "#04060c"), (0.35, "#080d1a"), (0.62, "#0c1526"),
-                     (0.80, "#12223a"), (1.0, "#0b1322")):
+    for off, col in ((0.0, C("#04060c")), (0.35, C("#080d1a")), (0.62, C("#0c1526")),
+                     (0.80, C("#12223a")), (1.0, C("#0b1322"))):
         g.add_color_stop_rgb(off, *rgbf(col))
     c.set_source(g)
     c.paint()
     # horizon glow picked up from the aurora
     rg = cairo.RadialGradient(W * 0.58, H * 0.86, 0, W * 0.58, H * 0.86, W * 0.62)
-    rg.add_color_stop_rgba(0, *rgbf("#1f5160"), 0.55)
-    rg.add_color_stop_rgba(0.5, *rgbf("#1a2f55"), 0.25)
-    rg.add_color_stop_rgba(1, *rgbf("#0c1526"), 0.0)
+    rg.add_color_stop_rgba(0, *rgbf(C("#1f5160")), 0.55)
+    rg.add_color_stop_rgba(0.5, *rgbf(C("#1a2f55")), 0.25)
+    rg.add_color_stop_rgba(1, *rgbf(C("#0c1526")), 0.0)
     c.set_source(rg)
     c.paint()
 
@@ -261,17 +267,17 @@ def night_mountains():
     m = cairo.ImageSurface(cairo.FORMAT_ARGB32, W, H)
     mc = cairo.Context(m)
     mountain_path(mc, 5, 0.835, 0.17, 0.55)
-    fill_vertical(mc, "#16263a", "#0b1424", 0.66, 0.90)
+    fill_vertical(mc, C("#16263a"), C("#0b1424"), 0.66, 0.90)
     rim = cairo.ImageSurface(cairo.FORMAT_ARGB32, W, H)
     rc = cairo.Context(rim)
     mountain_path(rc, 5, 0.835, 0.17, 0.55)
-    rc.set_source_rgba(*rgbf("#5fe0c8"), 0.55)
+    rc.set_source_rgba(*rgbf(C("#5fe0c8")), 0.55)
     rc.set_line_width(3)
     rc.stroke()
     mountain_path(mc, 17, 0.905, 0.15, 0.50, 0.3)
-    fill_vertical(mc, "#0b1220", "#070b14", 0.76, 1.0)
+    fill_vertical(mc, C("#0b1220"), C("#070b14"), 0.76, 1.0)
     mountain_path(mc, 29, 0.975, 0.10, 0.47, 0.7)
-    fill_vertical(mc, "#060910", "#04060b", 0.86, 1.0)
+    fill_vertical(mc, C("#060910"), C("#04060b"), 0.86, 1.0)
     out = surface_rgba(rim).filter(ImageFilter.GaussianBlur(3))
     out.alpha_composite(surface_rgba(m))
     return out
@@ -284,7 +290,7 @@ def render_night():
     au = cairo.ImageSurface(cairo.FORMAT_RGB24, W, H)
     ac = cairo.Context(au)
     ac.set_operator(cairo.OPERATOR_ADD)
-    draw_ribbons(ac, RIBBONS, ("#7ff2d2", "#33d6b0", "#4d6cf0", "#9a6cff"), edge_px=64)
+    draw_ribbons(ac, RIBBONS, (C("#7ff2d2"), C("#33d6b0"), C("#4d6cf0"), C("#9a6cff")), edge_px=64)
     layer = surface_rgb(au)
     detail = layer.filter(ImageFilter.GaussianBlur(2.2))
     soft = layer.filter(ImageFilter.GaussianBlur(14))
@@ -309,15 +315,15 @@ def dawn_sky():
     sky = cairo.ImageSurface(cairo.FORMAT_RGB24, W, H)
     c = cairo.Context(sky)
     g = cairo.LinearGradient(0, 0, 0, H)
-    for off, col in ((0.0, "#93a6ec"), (0.30, "#b7c3f5"), (0.55, "#dcd6f3"),
-                     (0.72, "#f5dbe4"), (0.84, "#ffe4d6"), (1.0, "#f7e0da")):
+    for off, col in ((0.0, C("#93a6ec")), (0.30, C("#b7c3f5")), (0.55, C("#dcd6f3")),
+                     (0.72, C("#f5dbe4")), (0.84, C("#ffe4d6")), (1.0, C("#f7e0da"))):
         g.add_color_stop_rgb(off, *rgbf(col))
     c.set_source(g)
     c.paint()
     sun = cairo.RadialGradient(W * 0.70, H * 0.84, 0, W * 0.70, H * 0.84, W * 0.55)
-    sun.add_color_stop_rgba(0, *rgbf("#fff4e6"), 0.85)
-    sun.add_color_stop_rgba(0.35, *rgbf("#ffe7d8"), 0.35)
-    sun.add_color_stop_rgba(1, *rgbf("#ffe7d8"), 0.0)
+    sun.add_color_stop_rgba(0, *rgbf(C("#fff4e6")), 0.85)
+    sun.add_color_stop_rgba(0.35, *rgbf(C("#ffe7d8")), 0.35)
+    sun.add_color_stop_rgba(1, *rgbf(C("#ffe7d8")), 0.0)
     c.set_source(sun)
     c.paint()
     return surface_rgb(sky)
@@ -327,7 +333,7 @@ def dawn_mountains():
     m = cairo.ImageSurface(cairo.FORMAT_ARGB32, W, H)
     mc = cairo.Context(m)
     mountain_path(mc, 5, 0.835, 0.17, 0.55)
-    fill_vertical(mc, "#c3c3e6", "#d9d0e8", 0.66, 0.90)
+    fill_vertical(mc, C("#c3c3e6"), C("#d9d0e8"), 0.66, 0.90)
     mist = cairo.LinearGradient(0, 0.80 * H, 0, 0.93 * H)
     mist.add_color_stop_rgba(0, 1, 0.96, 0.95, 0.0)
     mist.add_color_stop_rgba(1, 1, 0.96, 0.95, 0.55)
@@ -335,9 +341,9 @@ def dawn_mountains():
     mc.set_source(mist)
     mc.fill()
     mountain_path(mc, 17, 0.905, 0.15, 0.50, 0.3)
-    fill_vertical(mc, "#98a0d0", "#aeb1d8", 0.76, 1.0)
+    fill_vertical(mc, C("#98a0d0"), C("#aeb1d8"), 0.76, 1.0)
     mountain_path(mc, 29, 0.975, 0.10, 0.47, 0.7)
-    fill_vertical(mc, "#6d77ad", "#7a82b6", 0.86, 1.0)
+    fill_vertical(mc, C("#6d77ad"), C("#7a82b6"), 0.86, 1.0)
     return surface_rgba(m)
 
 
@@ -347,7 +353,7 @@ def render_dawn():
     # pastel aurora veils (alpha-over, not additive, on a light sky)
     au = cairo.ImageSurface(cairo.FORMAT_ARGB32, W, H)
     ac = cairo.Context(au)
-    draw_ribbons(ac, RIBBONS, ("#7fe6d2", "#55d0bd", "#7f8ff0", "#b39af2"),
+    draw_ribbons(ac, RIBBONS, (C("#7fe6d2"), C("#55d0bd"), C("#7f8ff0"), C("#b39af2")),
                  alpha_scale=1.1, edge_px=64)
     layer = surface_rgba(au)
     pre = layer.convert("RGBa")        # premultiplied blur: no dark fringes
@@ -411,7 +417,7 @@ def _package(out_root, pkg_id, name, desc, night, dawn):
 
 def package(out_root, night, dawn):
     """share/wallpapers/Borealis: images/ = light (dawn), images_dark/ = night."""
-    return _package(out_root, "Borealis", "Borealis",
+    return _package(out_root, IDS["wallpaper"], NAME,
                     "Aurora over the mountains — dawn and night", night, dawn)
 
 
@@ -419,16 +425,16 @@ def lock_package(out_root, night, dawn):
     """A dimmer dawn for the lock screen: Plasma draws its clock in white there,
     whatever the color scheme, and the bright dawn sky leaves it hard to read."""
     dim = ImageEnhance.Color(ImageEnhance.Brightness(dawn).enhance(0.62)).enhance(0.92)
-    return _package(out_root, "Borealis-Lock", "Borealis (lock screen)",
+    return _package(out_root, IDS["wallpaper_lock"], f"{NAME} (lock screen)",
                     "Aurora over the mountains, dimmed for white lock-screen text",
                     night, dim)
 
 
-def main(out_dir):
+def main(out_dir, tag=""):
     night = render_night()
     dawn = render_dawn()
-    night.save(os.path.join(out_dir, "night-master.png"))
-    dawn.save(os.path.join(out_dir, "dawn-master.png"))
+    night.save(os.path.join(out_dir, f"night-master{tag}.png"))
+    dawn.save(os.path.join(out_dir, f"dawn-master{tag}.png"))
     return night, dawn
 
 

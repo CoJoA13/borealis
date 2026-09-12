@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from gen_apps import TERM, ansi_colors  # noqa: E402
-from tokens import DARK, LIGHT, ensure_contrast, mix  # noqa: E402
+from tokens import DARK, LIGHT, NAME, SLUG, TITLES, ensure_contrast, mix  # noqa: E402
 
 VARIANTS = {"dark": DARK, "light": LIGHT}
 
@@ -183,7 +183,7 @@ def bash_snippet(vid):
     eval "$(dircolors -b ~/.config/borealis/terminal/dircolors-{vid})"
 alias ls='ls --color=auto'
 alias grep='grep --color=auto'
-export BAT_THEME='Borealis {vid.capitalize()}'
+export BAT_THEME='{TITLES[vid]}'
 export FZF_DEFAULT_OPTS="${{FZF_DEFAULT_OPTS:-}} {fzf}"
 # man pages in Borealis colours
 export LESS_TERMCAP_md=$'\\e[1;35m' LESS_TERMCAP_us=$'\\e[4;36m' \\
@@ -209,14 +209,14 @@ PROMPT_COMMAND=__borealis_ps1
 
 
 def build(out_root):
-    base = os.path.join(out_root, "terminal", "borealis")
+    base = os.path.join(out_root, "terminal", SLUG.lower())
     if os.path.exists(base):
         shutil.rmtree(base)
     os.makedirs(base)
     for vid in ("dark", "light"):
-        name = f"Borealis {vid.capitalize()}"
+        name = TITLES[vid]
         files = {
-            f"Borealis {vid.capitalize()}.tmTheme": bat_theme(vid, name),
+            f"{name}.tmTheme": bat_theme(vid, name),
             f"tmux-{vid}.conf": tmux_conf(vid),
             f"dircolors-{vid}": dircolors(vid),
             f"git-{vid}.conf": gitconfig(vid),

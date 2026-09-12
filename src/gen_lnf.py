@@ -7,30 +7,31 @@ import sys
 from PIL import Image, ImageEnhance, ImageFilter
 
 sys.path.insert(0, os.path.dirname(__file__))
-from tokens import AUTHOR, DARK, EMAIL, LICENSE, LIGHT, VERSION  # noqa: E402
+from tokens import (AUTHOR, DARK, EMAIL, IDS, LICENSE, LIGHT, NAME, TITLES,  # noqa: E402
+                    VERSION, remix_text)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "assets")
 
 PACKAGES = {
     "dark": {
-        "id": "Borealis-Dark",
-        "name": "Borealis Dark",
+        "id": IDS["lnf_dark"],
+        "name": TITLES["dark"],
         "desc": "Aurora night: ink-navy surfaces, periwinkle and aurora-teal accents",
-        "colors": "BorealisDark",
-        "icons": "Borealis-Dark",
-        "cursors": "Borealis-Snow-Cursors",
-        "aurorae": "Borealis-Dark",
+        "colors": IDS["colors_dark"],
+        "icons": IDS["icons_dark"],
+        "cursors": IDS["cursors_dark"],
+        "aurorae": IDS["aurorae_dark"],
         "palette": DARK,
     },
     "light": {
-        "id": "Borealis-Light",
-        "name": "Borealis Light",
+        "id": IDS["lnf_light"],
+        "name": TITLES["light"],
         "desc": "Polar dawn: frosted snow surfaces, periwinkle and aurora-teal accents",
-        "colors": "BorealisLight",
-        "icons": "Borealis-Light",
-        "cursors": "Borealis-Ink-Cursors",
-        "aurorae": "Borealis-Light",
+        "colors": IDS["colors_light"],
+        "icons": IDS["icons_light"],
+        "cursors": IDS["cursors_light"],
+        "aurorae": IDS["aurorae_light"],
         "palette": LIGHT,
     },
 }
@@ -97,10 +98,10 @@ def defaults(pkg):
         f"Theme={pkg['icons']}",
         "",
         "[plasmarc][Theme]",
-        "name=Borealis",
+        f"name={IDS['style']}",
         "",
         "[Wallpaper]",
-        "Image=Borealis",
+        f"Image={IDS['wallpaper']}",
         "",
         "[kcminputrc][Mouse]",
         f"cursorTheme={pkg['cursors']}",
@@ -226,7 +227,8 @@ def splash(pkg, wall, dest):
     with open(os.path.join(dest, "Splash.qml"), "w") as f:
         f.write(qml)
     for name in ("logo.svg", "halo.svg"):
-        shutil.copy(os.path.join(ASSETS, name), img_dir)
+        with open(os.path.join(img_dir, name), "w") as f:
+            f.write(remix_text(open(os.path.join(ASSETS, name)).read()))
     # calm, blurred, dimmed wallpaper as the splash backdrop
     bd = wall.resize((1920, 1200), Image.LANCZOS).filter(ImageFilter.GaussianBlur(28))
     bd = ImageEnhance.Brightness(bd).enhance(0.55 if p["is_dark"] else 1.04)

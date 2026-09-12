@@ -11,6 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from render import svg_to_image  # noqa: E402
+from tokens import IDS, NAME, remix_text  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FRAMES = 60          # two-step spreads all throbber frames over a fixed 2 s loop
@@ -40,24 +41,24 @@ def spinner_svg(phase, size=40, width=3.6):
                      f'A{r} {r} 0 0 1 {c + r * math.cos(a1):.3f} {c + r * math.sin(a1):.3f}" fill="none" '
                      f'stroke="{lerp(SPIN, i / (segs - 1))}" stroke-opacity="{op:.2f}" '
                      f'stroke-width="{width}" stroke-linecap="{cap}"/>')
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
-            f'viewBox="0 0 {size} {size}">{"".join(parts)}</svg>')
+    return remix_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
+                      f'viewBox="0 0 {size} {size}">{"".join(parts)}</svg>')
 
 
 def watermark_svg():
     """Badge + letter-spaced wordmark, 300x190."""
     logo = open(os.path.join(HERE, "assets", "logo.svg")).read()
     inner = logo[logo.index(">") + 1:logo.rindex("</svg>")]
-    return ('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="190" viewBox="0 0 300 190">'
+    return remix_text('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="190" viewBox="0 0 300 190">'
             f'<g transform="translate(102 0) scale(1.5)">{inner}</g>'
             '<text x="150" y="176" text-anchor="middle" fill="#e6e9f2" '
             'font-family="Noto Sans, Cantarell, sans-serif" font-weight="300" font-size="30" '
-            'letter-spacing="9">Borealis</text></svg>')
+            f'letter-spacing="9">{NAME}</text></svg>')
 
 
 def simple(w, h, body):
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
-            f'viewBox="0 0 {w} {h}">{body}</svg>')
+    return remix_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
+                      f'viewBox="0 0 {w} {h}">{body}</svg>')
 
 
 FIELD = 'fill="#161b27" stroke="#3a4258" stroke-width="1"'
@@ -90,9 +91,9 @@ ART = {
 
 
 def plymouth_file(imagedir):
-    return f"""[Plymouth Theme]
-Name=Borealis
-Description=Aurora boot splash from the Borealis KDE theme
+    return remix_text(f"""[Plymouth Theme]
+Name={NAME}
+Description=Aurora boot splash from the {NAME} KDE theme
 ModuleName=two-step
 
 [two-step]
@@ -152,11 +153,11 @@ ProgressBarShowPercentComplete=true
 UseProgressBar=true
 Title=Resetting the system…
 SubTitle=Please keep your computer on
-"""
+""")
 
 
 def build(out_root):
-    base = os.path.join(out_root, "plymouth", "themes", "borealis")
+    base = os.path.join(out_root, "plymouth", "themes", IDS["plymouth"])
     if os.path.exists(base):
         shutil.rmtree(base)
     os.makedirs(base)
@@ -165,8 +166,8 @@ def build(out_root):
     svg_to_image(watermark_svg(), 300, 190).save(os.path.join(base, "watermark.png"))
     for name, (w, h, body) in ART.items():
         svg_to_image(simple(w, h, body), w, h).save(os.path.join(base, name))
-    with open(os.path.join(base, "borealis.plymouth"), "w") as f:
-        f.write(plymouth_file("/usr/share/plymouth/themes/borealis"))
+    with open(os.path.join(base, IDS["plymouth"] + ".plymouth"), "w") as f:
+        f.write(plymouth_file("/usr/share/plymouth/themes/" + IDS["plymouth"]))
     return base
 
 

@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from tokens import AUTHOR, EMAIL, ensure_contrast, kde, mix  # noqa: E402
+from tokens import AUTHOR, EMAIL, TITLES, ensure_contrast, kde, mix  # noqa: E402
 
 TERM = {
     "dark": {
@@ -197,7 +197,7 @@ def build(out_root):
     kth = os.path.join(out_root, "org.kde.syntax-highlighting", "themes")
     os.makedirs(kon, exist_ok=True)
     os.makedirs(kth, exist_ok=True)
-    for vid, title in (("dark", "Borealis Dark"), ("light", "Borealis Light")):
+    for vid, title in (("dark", TITLES["dark"]), ("light", TITLES["light"])):
         sid = title.replace(" ", "")
         with open(os.path.join(kon, sid + ".colorscheme"), "w") as f:
             f.write(konsole_scheme(vid, title))

@@ -10,7 +10,18 @@ layout(std140, binding = 0) uniform buf {
     float time;
     float intensity;
     float dawn;
+    float hueShift;   // a remixed palette rotates the aurora with it
 };
+
+vec3 rotateHue(vec3 c, float a) {
+    if (a == 0.0) {
+        return c;
+    }
+    const vec3 k = vec3(0.57735);           // normalize(vec3(1.0))
+    float ca = cos(a * 6.2831853);
+    float sa = sin(a * 6.2831853);
+    return c * ca + cross(k, c) * sa + k * dot(k, c) * (1.0 - ca);
+}
 
 float hash(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
@@ -90,8 +101,8 @@ void main() {
         float a = clamp(c.a * 0.55, 0.0, 0.85);
         vec3 hue = c.a > 0.0 ? c.rgb / c.a : vec3(0.0);
         hue = mix(hue, vec3(0.72, 0.76, 0.98), 0.25);
-        fragColor = vec4(hue * a, a) * qt_Opacity;
+        fragColor = vec4(rotateHue(hue, hueShift) * a, a) * qt_Opacity;
     } else {
-        fragColor = vec4(c.rgb, 0.0) * qt_Opacity;
+        fragColor = vec4(rotateHue(c.rgb, hueShift), 0.0) * qt_Opacity;
     }
 }

@@ -41,6 +41,9 @@ After the component listings exist, add their store IDs to each Global Theme's
 ]
 ```
 
+A remix (`./build.py --accent … --name …`) produces the same archive set under
+its own name, so a colourway can be published as a separate listing.
+
 Screenshots: `docs/preview-dark.jpg`, `docs/preview-light.jpg`, `docs/switcher-dark.jpg`,
 `docs/splash.jpg`, `docs/editor-dark.jpg`, `docs/gtk.jpg` (all rendered from the real theme).
 

@@ -12,6 +12,7 @@ import shutil
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
+from tokens import IDS, NAME, remix_text  # noqa: E402
 import cursor_glyphs as G  # noqa: E402
 import xcursor as X  # noqa: E402
 
@@ -40,8 +41,8 @@ CANON = {
 EXTRA_ALIASES = {"alias": ["dnd-link"], "context-menu": ["dnd-ask"]}
 
 THEMES = (
-    ("Borealis-Snow-Cursors", "Borealis Snow", "Light cursors for dark desktops", G.SNOW),
-    ("Borealis-Ink-Cursors", "Borealis Ink", "Dark cursors for light desktops", G.INK),
+    (IDS["cursors_dark"], IDS["cursors_dark_name"], "Light cursors for dark desktops", G.SNOW),
+    (IDS["cursors_light"], IDS["cursors_light_name"], "Dark cursors for light desktops", G.INK),
 )
 
 SVG_HEAD = ('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">'
@@ -56,10 +57,10 @@ def frames_for(key, pal):
         out = []
         for i in range(G.WAIT_FRAMES):
             body, hx, hy = G.ANIMATED[key](i / G.WAIT_FRAMES)(pal)
-            out.append((SVG_HEAD + body + "</svg>", hx, hy, G.WAIT_DELAY))
+            out.append((remix_text(SVG_HEAD + body + "</svg>"), hx, hy, G.WAIT_DELAY))
         return out
     body, hx, hy = G.STATIC[key](pal)
-    return [(SVG_HEAD + body + "</svg>", hx, hy, 0)]
+    return [(remix_text(SVG_HEAD + body + "</svg>"), hx, hy, 0)]
 
 
 def build_theme(root, dirname, title, comment, pal):
@@ -96,7 +97,7 @@ def build_theme(root, dirname, title, comment, pal):
     with open(os.path.join(base, "index.theme"), "w") as f:
         f.write("[Icon Theme]\n"
                 f"Name={title}\n"
-                f"Comment={comment} — Borealis\n"
+                f"Comment={comment} — {NAME}\n"
                 "Inherits=breeze_cursors\n")
     return base
 

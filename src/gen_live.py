@@ -6,6 +6,7 @@ mountains. Night or dawn artwork follows the colour scheme unless pinned.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -14,10 +15,10 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(__file__))
 import gen_wallpaper as GW  # noqa: E402
-from tokens import AUTHOR, EMAIL, LICENSE, VERSION  # noqa: E402
+from tokens import AUTHOR, EMAIL, HUE_SHIFT, IDS, LICENSE, NAME, VERSION, remix_text  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PLUGIN_ID = "org.borealis.aurora"
+PLUGIN_ID = IDS["live"]
 LAYER_SIZE = (2560, 1600)
 QSB = shutil.which("qsb") or "/usr/lib64/qt6/bin/qsb"
 
@@ -57,17 +58,27 @@ def build(out_root, cache_dir):
     shutil.copytree(img_cache, os.path.join(contents, "images"))
     shaders(os.path.join(contents, "shaders"))
     for sub in ("ui", "config"):
-        shutil.copytree(os.path.join(HERE, "live", sub), os.path.join(contents, sub))
+        src_dir = os.path.join(HERE, "live", sub)
+        dest_dir = os.path.join(contents, sub)
+        shutil.copytree(src_dir, dest_dir)
+        for fn in os.listdir(dest_dir):
+            if not fn.endswith((".qml", ".xml")):
+                continue
+            path = os.path.join(dest_dir, fn)
+            text = re.sub(r"property real hueShift: [\d.]+",
+                          f"property real hueShift: {HUE_SHIFT:.6f}", open(path).read())
+            with open(path, "w") as f:
+                f.write(remix_text(text))
     meta = {
         "KPackageStructure": "Plasma/Wallpaper",
         "KPlugin": {
             "Authors": [{"Name": AUTHOR, "Email": EMAIL}],
             "Category": "",
-            "Description": "Animated aurora over the Borealis mountains",
+            "Description": f"Animated aurora over the {NAME} mountains",
             "Icon": "preferences-desktop-wallpaper",
             "Id": PLUGIN_ID,
             "License": LICENSE,
-            "Name": "Borealis Aurora (animated)",
+            "Name": f"{NAME} Aurora (animated)",
             "Version": VERSION,
         },
         "X-Plasma-API-Minimum-Version": "6.0",

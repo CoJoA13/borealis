@@ -71,21 +71,33 @@ if [ "$MODE" = restore ]; then
 fi
 
 current="$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage)"
-case "$current" in
-    Borealis-*) echo "Borealis is the active Global Theme — switch to another one first." >&2; exit 1 ;;
-esac
-for item in \
-    plasma/look-and-feel/Borealis-Dark plasma/look-and-feel/Borealis-Light \
-    plasma/desktoptheme/Borealis aurorae/themes/Borealis-Dark aurorae/themes/Borealis-Light \
-    color-schemes/BorealisDark.colors color-schemes/BorealisLight.colors \
-    icons/Borealis-Dark icons/Borealis-Light icons/Borealis-Snow-Cursors icons/Borealis-Ink-Cursors \
-    wallpapers/Borealis wallpapers/Borealis-Lock plasma/wallpapers/org.borealis.aurora sounds/Borealis \
-    konsole/BorealisDark.colorscheme konsole/BorealisLight.colorscheme \
-    "konsole/Borealis Dark.profile" "konsole/Borealis Light.profile" \
-    org.kde.syntax-highlighting/themes/borealisdark.theme \
-    org.kde.syntax-highlighting/themes/borealislight.theme; do
+MANIFEST="$CONF/borealis/installed.list"
+if [ -f "$MANIFEST" ]; then
+    mapfile -t ITEMS < "$MANIFEST"
+else            # older install, or the list was removed: fall back to the names we ship
+    ITEMS=(
+        plasma/look-and-feel/Borealis-Dark plasma/look-and-feel/Borealis-Light
+        plasma/desktoptheme/Borealis aurorae/themes/Borealis-Dark aurorae/themes/Borealis-Light
+        color-schemes/BorealisDark.colors color-schemes/BorealisLight.colors
+        icons/Borealis-Dark icons/Borealis-Light icons/Borealis-Snow-Cursors icons/Borealis-Ink-Cursors
+        wallpapers/Borealis wallpapers/Borealis-Lock plasma/wallpapers/org.borealis.aurora
+        sounds/Borealis konsole/BorealisDark.colorscheme konsole/BorealisLight.colorscheme
+        "konsole/Borealis Dark.profile" "konsole/Borealis Light.profile"
+        org.kde.syntax-highlighting/themes/borealisdark.theme
+        org.kde.syntax-highlighting/themes/borealislight.theme
+    )
+fi
+for item in "${ITEMS[@]}"; do
+    case "$item" in plasma/look-and-feel/*)
+        [ "$current" = "${item##*/}" ] && {
+            echo "${item##*/} is the active Global Theme — switch to another one first." >&2; exit 1; }
+    esac
+done
+for item in "${ITEMS[@]}"; do
+    [ -n "$item" ] || continue
     if [ -e "$DEST/$item" ]; then rm -rf "${DEST:?}/$item"; echo "  - $item"; fi
 done
+rm -f "$MANIFEST"
 if [ -f "$CONF/gtk-4.0/$GTKCSS" ]; then
     rm -f "$CONF/gtk-4.0/$GTKCSS"
     sed -i "/^@import '$GTKCSS';\$/d" "$CONF/gtk-4.0/gtk.css" 2>/dev/null || true

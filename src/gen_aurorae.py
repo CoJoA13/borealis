@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from svgkit import fmt  # noqa: E402
-from tokens import AUTHOR, DARK, EMAIL, LICENSE, LIGHT, VERSION, kde, mix  # noqa: E402
+from tokens import AUTHOR, DARK, EMAIL, IDS, LICENSE, LIGHT, VERSION, kde, mix  # noqa: E402
 
 PAD_L = PAD_R = 24
 PAD_T, PAD_B = 16, 32
@@ -331,7 +331,7 @@ def rc(p):
 
 def build(out_root):
     made = []
-    for p, dirname in ((DARK, "Borealis-Dark"), (LIGHT, "Borealis-Light")):
+    for p, dirname in ((DARK, IDS["aurorae_dark"]), (LIGHT, IDS["aurorae_light"])):
         base = os.path.join(out_root, "aurorae", "themes", dirname)
         if os.path.exists(base):
             shutil.rmtree(base)

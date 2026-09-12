@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from svgkit import Doc, fmt, rounded_piece, shadow_piece  # noqa: E402
-from tokens import AUTHOR, EMAIL, LICENSE, VERSION  # noqa: E402
+from tokens import AUTHOR, EMAIL, IDS, LICENSE, NAME, VERSION  # noqa: E402
 
 TEXT, BG, HL = "ColorScheme-Text", "ColorScheme-Background", "ColorScheme-Highlight"
 VIEWBG, BTNBG, BTNTEXT = "ColorScheme-ViewBackground", "ColorScheme-ButtonBackground", "ColorScheme-ButtonText"
@@ -498,7 +498,7 @@ def pager_svg():
 
 # ------------------------------------------------------------------ build --
 def build(out_root):
-    base = os.path.join(out_root, "plasma", "desktoptheme", "Borealis")
+    base = os.path.join(out_root, "plasma", "desktoptheme", IDS["style"])
     if os.path.exists(base):
         shutil.rmtree(base)
 
@@ -555,9 +555,9 @@ def build(out_root):
             "Category": "",
             "Description": "Frosted, rounded Plasma style that follows your color scheme",
             "EnabledByDefault": True,
-            "Id": "Borealis",
+            "Id": IDS["style"],
             "License": LICENSE,
-            "Name": "Borealis",
+            "Name": NAME,
             "Version": VERSION,
             "Website": "",
         },
@@ -571,7 +571,7 @@ def build(out_root):
                 "[AdaptiveTransparency]\nenabled=true\n\n"
                 "[BlurBehindEffect]\nenabled=true\n\n"
                 "[ContrastEffect]\nenabled=true\n\n"
-                "[Wallpaper]\ndefaultWallpaperTheme=Borealis\n")
+                f"[Wallpaper]\ndefaultWallpaperTheme={IDS['wallpaper']}\n")
     return base
 
 

@@ -175,5 +175,9 @@ NAMES = {
 
 
 def icon_svg(glyph):
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">'
-            f'{SQUIRCLE}{GLYPHS[glyph]}</svg>')
+    import os
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from tokens import remix_text
+    return remix_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" '
+                      f'viewBox="0 0 128 128">{SQUIRCLE}{GLYPHS[glyph]}</svg>')

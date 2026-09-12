@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Build every Borealis component into build/share/ (mirrors ~/.local/share/).
 
-    ./build.py            build everything
-    ./build.py colors lnf build only some steps
+    ./build.py                       build everything
+    ./build.py colors lnf            build only some steps
+    ./build.py --accent "#ff8a5b" --name "Borealis Ember"
+                                     a remix: the whole theme rotated onto a
+                                     new accent, installable next to the original
+    ./build.py --out ~/ember/share   write somewhere else
 """
+import argparse
 import os
 import shutil
 import sys
@@ -20,12 +25,14 @@ def wallpapers():
     """Render (or reuse) the wallpaper masters: (night, dawn) PIL images."""
     from PIL import Image
     import gen_wallpaper
-    n, d = (os.path.join(CACHE, f) for f in ("night-master.png", "dawn-master.png"))
+    from tokens import HUE_SHIFT, SATURATION
+    tag = "" if (HUE_SHIFT, SATURATION) == (0.0, 1.0) else f"-{HUE_SHIFT:.4f}x{SATURATION:g}"
+    n, d = (os.path.join(CACHE, f"{v}-master{tag}.png") for v in ("night", "dawn"))
     src = os.path.join(HERE, "src", "gen_wallpaper.py")
     fresh = all(os.path.exists(p) and os.path.getmtime(p) > os.path.getmtime(src) for p in (n, d))
     if not fresh:
         os.makedirs(CACHE, exist_ok=True)
-        gen_wallpaper.main(CACHE)
+        gen_wallpaper.main(CACHE, tag)
     return Image.open(n).convert("RGB"), Image.open(d).convert("RGB")
 
 
@@ -68,17 +75,17 @@ def step_icons():
 
 def step_sounds():
     import gen_sounds
-    out = os.path.join(OUT, "sounds", "Borealis", "index.theme")
+    from tokens import IDS
+    # the chimes don't depend on the palette, so one render serves every remix
     src = os.path.join(HERE, "src", "gen_sounds.py")
     cached = os.path.join(CACHE, "sounds")
-    if not (os.path.exists(os.path.join(cached, "sounds", "Borealis", "index.theme"))
-            and os.path.getmtime(os.path.join(cached, "sounds", "Borealis", "index.theme"))
-            > os.path.getmtime(src)):
+    stamp = os.path.join(cached, "sounds", IDS["sounds"], "index.theme")
+    if not (os.path.exists(stamp) and os.path.getmtime(stamp) > os.path.getmtime(src)):
         shutil.rmtree(cached, ignore_errors=True)
         gen_sounds.build(cached)
-    dst = os.path.dirname(out)
+    dst = os.path.join(OUT, "sounds", IDS["sounds"])
     shutil.rmtree(dst, ignore_errors=True)
-    shutil.copytree(os.path.join(cached, "sounds", "Borealis"), dst, symlinks=True)
+    shutil.copytree(os.path.join(cached, "sounds", IDS["sounds"]), dst, symlinks=True)
 
 
 def step_live():
@@ -126,10 +133,30 @@ STEPS = {
 
 
 def main(argv):
-    wanted = argv or list(STEPS)
+    global OUT
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("steps", nargs="*", help=f"one or more of: {', '.join(STEPS)}")
+    ap.add_argument("--accent", help="hex colour the whole theme is rotated onto, e.g. '#ff8a5b'")
+    ap.add_argument("--name", help='theme name for a remix, e.g. "Borealis Ember"')
+    ap.add_argument("--saturation", type=float, help="multiply every colour's saturation")
+    ap.add_argument("--out", help="output directory (default build/share)")
+    a = ap.parse_args(argv)
+    if a.accent:
+        os.environ["BOREALIS_ACCENT"] = a.accent
+    if a.name:
+        os.environ["BOREALIS_NAME"] = a.name
+    if a.saturation:
+        os.environ["BOREALIS_SATURATION"] = str(a.saturation)
+    if a.out:
+        OUT = os.path.abspath(os.path.expanduser(a.out))
+    if "tokens" in sys.modules:
+        sys.exit("build.py: set the palette before importing the generators")
+    wanted = a.steps or list(STEPS)
     unknown = [w for w in wanted if w not in STEPS]
     if unknown:
         sys.exit(f"unknown step(s): {', '.join(unknown)}; choose from {', '.join(STEPS)}")
+    argv = a.steps
     if not argv and os.path.exists(OUT):
         shutil.rmtree(OUT)
     os.makedirs(OUT, exist_ok=True)

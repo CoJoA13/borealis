@@ -11,18 +11,19 @@ import shutil
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
+from tokens import IDS, NAME, TITLES, remix_text  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 THEMES = (
-    ("Borealis-Dark", "Borealis Dark", "Tela-dark,breeze-dark,hicolor"),
-    ("Borealis-Light", "Borealis Light", "Tela-light,breeze,hicolor"),
+    (IDS["icons_dark"], TITLES["dark"], "Tela-dark,breeze-dark,hicolor"),
+    (IDS["icons_light"], TITLES["light"], "Tela-light,breeze,hicolor"),
 )
 GRADIENT = (("0", "#5fe0c8"), ("0.55", "#8b9cff"), ("1", "#b18cff"))
 # Only folder-like names are overridden; generic names such as "network"
 # would otherwise catch icon-name fallbacks (e.g. tray status icons).
 KEEP_PREFIXES = ("folder", "user-home", "user-desktop", "desktop", "inode-directory")
 LOGO_NAMES = ("start-here-kde", "start-here-kde-plasma", "start-here-kde-symbolic",
-              "start-here", "start-here-symbolic", "borealis")
+              "start-here", "start-here-symbolic", IDS["logo"])
 
 
 def find_tela():
@@ -78,9 +79,10 @@ def build_theme(root, dirname, title, inherits, tela):
     os.makedirs(places)
     os.makedirs(brand)
     build_app_icons(base)
-    logo = os.path.join(HERE, "assets", "logo.svg")
+    logo = remix_text(open(os.path.join(HERE, "assets", "logo.svg")).read())
     for n in LOGO_NAMES:
-        shutil.copy(logo, os.path.join(brand, n + ".svg"))
+        with open(os.path.join(brand, n + ".svg"), "w") as f:
+            f.write(logo)
     count = 0
     if tela:
         made = set()
@@ -105,7 +107,7 @@ def build_theme(root, dirname, title, inherits, tela):
     with open(os.path.join(base, "index.theme"), "w") as f:
         f.write("[Icon Theme]\n"
                 f"Name={title}\n"
-                "Comment=Aurora-gradient folders and the Borealis logo on top of Tela\n"
+                f"Comment=Aurora-gradient folders and the {NAME} logo on top of Tela\n"
                 f"Inherits={inherits}\n"
                 "Example=folder\n"
                 "FollowsColorScheme=true\n"

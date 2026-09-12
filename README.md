@@ -134,6 +134,21 @@ With `make` installed, `make`, `make check`, `make test`, `make package` and
 
 Palette, radii and translucency live in `src/tokens.py`.
 
+### Remix it onto another accent
+
+```bash
+./build.py --accent "#ff8a5b" --name "Borealis Ember" --out ~/ember/share
+./install.sh --from ~/ember/share
+```
+
+Every colour — surfaces, decorations, icons, cursors, both wallpapers, the
+animated aurora, splash, boot splash, terminal kit and GTK CSS — is rotated
+around the colour wheel by the angle between your accent and Borealis's
+periwinkle, and the accent itself appears exactly as given (nudged only if it
+would fail contrast). Red, amber and green keep their meaning. The remix gets
+its own package names, so it installs next to the original and both show up in
+the Global Theme list. `--saturation 1.2` makes everything more vivid.
+
 ## License
 
 GPL-3.0-or-later (see `LICENSE`). Artwork (wallpapers, logo, icons, cursors,
