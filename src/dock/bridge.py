@@ -93,7 +93,10 @@ class DockService(QObject):
 
     @Slot(str)
     def Hello(self, version):
+        # a bridge (re)loaded after the dock started missed what the dock told
+        # the previous one: say it again
         print("dock: KWin bridge", version, "is up", flush=True)
+        self.controller.push_config()
         self.bridge.send("resync")
 
     @Slot(str)

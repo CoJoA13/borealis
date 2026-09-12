@@ -86,7 +86,8 @@ class DockBackend(QObject):
         try:
             infos = json.loads(bytes(self._probe.readAllStandardOutput()).decode())["data"][0]
             for info in infos:
-                if info[4] == f"{ids.NAME} Dock: activate app 1" and info[6]:
+                # (unique name, friendly name, component, component name, context, context name, keys, defaults)
+                if info[0] == f"{ids.NAME} Dock: activate app 1" and info[6]:
                     key = QKeySequence(info[6][0]).toString()
         except (ValueError, KeyError, IndexError, TypeError):
             pass

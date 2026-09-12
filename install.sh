@@ -173,12 +173,20 @@ dock_ids() {
     DOCK_SLUG="$(sed -n "s/^SLUG = ['\"]\(.*\)['\"]\$/\1/p" "$SRC/$DOCK_EXE/ids.py")"
 }
 kwin_bridge() {     # on | off
-    local value=false
+    local value=false copy
     [ "$1" = on ] && value=true
     kwriteconfig6 --file kwinrc --group Plugins --key "${DOCK_BRIDGE}Enabled" "$value"
-    # unload first: a script that is already running keeps its old code otherwise
     qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript "$DOCK_BRIDGE" >/dev/null 2>&1 || true
-    qdbus-qt6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
+    [ "$1" = on ] || return 0
+    # KWin compiles a script's QML once per file path for the whole session, so
+    # reloading the installed file would run the old code again. This version
+    # loads from a path of its own (gone at logout; the next login reads the
+    # installed package as usual).
+    copy="${XDG_RUNTIME_DIR:-/tmp}/borealis-dockbridge/$(cat "$DEST/kwin/scripts/$DOCK_BRIDGE/contents/ui/"*.qml | sha1sum | cut -c1-12)"
+    mkdir -p "$copy"
+    cp "$DEST/kwin/scripts/$DOCK_BRIDGE/contents/ui/"*.qml "$copy/"
+    qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadDeclarativeScript "$copy/main.qml" "$DOCK_BRIDGE" >/dev/null 2>&1 \
+        && qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null 2>&1 || true
 }
 task_manager_keys() {  # none | meta
     # plasmashell keeps Meta+1…9 for a task manager even when there is none, and
