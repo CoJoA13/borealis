@@ -17,6 +17,8 @@ Kirigami.FormLayout {
     property alias cfg_Speed: speed.value
     property alias cfg_Intensity: intensity.value
     property alias cfg_Twinkle: twinkle.checked
+    property alias cfg_RealAurora: real_.checked
+    property alias cfg_AuroraAlert: alert.checked
     property alias cfg_Fps: fps.value
     property alias cfg_PauseWhenCovered: covered.checked
     property int cfg_BatteryMode
@@ -54,6 +56,26 @@ Kirigami.FormLayout {
         id: twinkle
         Kirigami.FormData.label: i18nd("plasma_wallpaper_org.borealis.aurora", "Stars:")
         text: i18nd("plasma_wallpaper_org.borealis.aurora", "Twinkle")
+    }
+
+    QQC2.CheckBox {
+        id: real_
+        Kirigami.FormData.label: i18nd("plasma_wallpaper_org.borealis.aurora", "Real aurora:")
+        text: i18nd("plasma_wallpaper_org.borealis.aurora", "Follow tonight's actual activity")
+    }
+
+    QQC2.Label {
+        Layout.maximumWidth: Kirigami.Units.gridUnit * 18
+        wrapMode: Text.WordWrap
+        font: Kirigami.Theme.smallFont
+        opacity: 0.7
+        text: i18nd("plasma_wallpaper_org.borealis.aurora", "Asks NOAA for the planetary K-index every 20 minutes — the only time Borealis uses the network.")
+    }
+
+    QQC2.CheckBox {
+        id: alert
+        enabled: real_.checked
+        text: i18nd("plasma_wallpaper_org.borealis.aurora", "Notify me when a storm reaches K-index 5")
     }
 
     QQC2.SpinBox {

@@ -29,6 +29,14 @@
       <label>Pause while a maximized or fullscreen window covers the screen</label>
       <default>true</default>
     </entry>
+    <entry name="RealAurora" type="Bool">
+      <label>Follow NOAA's real planetary K-index (the only network access)</label>
+      <default>false</default>
+    </entry>
+    <entry name="AuroraAlert" type="Bool">
+      <label>Notify when the K-index reaches 5</label>
+      <default>false</default>
+    </entry>
     <entry name="BatteryMode" type="Int">
       <label>On battery: 0 = keep going, 1 = slow down, 2 = pause</label>
       <default>1</default>

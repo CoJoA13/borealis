@@ -43,6 +43,10 @@ WallpaperItem {
         return Math.max(5, f);
     }
 
+    // real aurora activity (opt-in): quiet nights dim, real storms blaze
+    property real kpFactor: spaceLoader.item ? spaceLoader.item.factor : 1.0
+    Behavior on kpFactor { NumberAnimation { duration: 4000 } }
+
     // "accent color from wallpaper" would otherwise sample a random frame
     accentColor: night ? "#8b9cff" : "#5566e0"
 
@@ -99,7 +103,7 @@ WallpaperItem {
     component Aurora: ShaderEffect {
         anchors.fill: parent
         property real time
-        property real intensity: root.configuration.Intensity / 100
+        property real intensity: root.configuration.Intensity / 100 * root.kpFactor
         property real dawn: root.night ? 0.0 : 1.0
         property real hueShift: 0.0      // a remix rotates the aurora here
         fragmentShader: Qt.resolvedUrl("../shaders/aurora.frag.qsb")
@@ -134,6 +138,14 @@ WallpaperItem {
         id: pauseLoader
         active: root.configuration.PauseWhenCovered && !root.onLockScreen
         source: "PauseDetector.qml"
+    }
+    Loader {
+        id: spaceLoader
+        active: root.configuration.RealAurora && !root.onLockScreen
+        source: "SpaceWeather.qml"
+        onLoaded: {
+            item.alerts = Qt.binding(() => root.configuration.AuroraAlert);
+        }
     }
     Loader {
         id: powerLoader

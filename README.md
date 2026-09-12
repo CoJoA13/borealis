@@ -24,7 +24,7 @@ Built for Fedora 44 / Plasma 6.7.
 | Window decoration | Borealis-Dark / -Light (Aurorae) | Teal · periwinkle · rose pills; glyphs appear on hover |
 | Task switcher | built into each Global Theme | Frosted card of rounded window previews (Alt+Tab) |
 | Wallpaper | Borealis | Procedural aurora: *night* (dark) and *dawn* (light) |
-| Animated wallpaper | Borealis Aurora | GPU-shader aurora + twinkling stars, for desktop **and lock screen**; pauses behind maximized windows and on battery |
+| Animated wallpaper | Borealis Aurora | GPU-shader aurora + twinkling stars, for desktop **and lock screen**; pauses behind maximized windows, eases off on battery, and can follow the **real** aurora |
 | Cursors | Borealis Snow (dark), Borealis Ink (light) | SVG cursors + Xcursor fallbacks, aurora spinner |
 | Icons | Borealis-Dark / -Light | Aurora-gradient folders, squircle icons for common apps, Borealis logo — on top of **Tela** |
 | Sounds | Borealis | Soft glassy chimes (E-major pentatonic) for login, notifications, devices, battery… |
@@ -80,6 +80,16 @@ stops completely behind maximized/fullscreen windows and when animations are
 turned off, and on battery slows to 10 fps (or pauses, or keeps going — your
 choice). On the lock screen it runs at most 15 fps, because Plasma re-renders
 the wallpaper through a blur there.
+
+### Real aurora activity
+
+*Wallpaper settings › Real aurora › Follow tonight's actual activity.* The
+wallpaper then asks NOAA's space weather service for the planetary K-index
+every 20 minutes and scales the aurora to match: barely there on a quiet night,
+blazing during a storm. It can also notify you when the index reaches 5, which
+is roughly when an aurora becomes visible at mid latitudes. This is the only
+part of Borealis that uses the network, it is off by default, and it sends
+nothing but the request.
 
 ### Day/night switching
 
