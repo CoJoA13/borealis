@@ -103,6 +103,11 @@ def step_terminal():
     gen_terminal.build(OUT)
 
 
+def step_tweaks():
+    import gen_tweaks
+    gen_tweaks.build(OUT)
+
+
 def step_gtk():
     import gen_gtk
     gen_gtk.build(OUT)
@@ -127,6 +132,7 @@ STEPS = {
     "live": step_live,
     "plymouth": step_plymouth,
     "terminal": step_terminal,
+    "tweaks": step_tweaks,
     "gtk": step_gtk,
     "lnf": step_lnf,
 }

@@ -33,6 +33,7 @@ Built for Fedora 44 / Plasma 6.7.
 | Boot splash | Borealis (Plymouth) | Same logo and aurora spinner from power-on |
 | Desktop layout | built into each Global Theme | Floating top bar (launcher, global menu, centered clock, tray) + floating dock |
 | Konsole / Kate | Borealis Dark / Light | Terminal schemes + profiles, editor themes |
+| Tweaks app | **Borealis Tweaks** | Switch variant, remix the palette onto any colour, toggle the animated aurora, undo |
 | Command line | bat, tmux, git, `ls`, fzf, bash prompt | One palette for the terminal's contents too (`--terminal`) |
 | GTK4 / libadwaita | `borealis-libadwaita.css` | Borealis surfaces and the exact accent for GNOME apps, light/dark live (GTK3 apps already follow via Breeze-GTK) |
 
@@ -143,6 +144,15 @@ With `make` installed, `make`, `make check`, `make test`, `make package` and
 `make apply` wrap the same scripts.
 
 Palette, radii and translucency live in `src/tokens.py`.
+
+### Borealis Tweaks (the app)
+
+`install.sh` also installs a small app — look for **Borealis Tweaks** in your
+launcher. It switches between Dark, Light and day/night, turns the animated
+aurora on or off, rebuilds the whole theme around a colour you pick (seven
+presets or a custom colour), and restores any earlier backup. The heavy lifting
+is the same `build.py` and `install.sh` used here, so anything it does can be
+undone from the terminal. It needs PySide6 (`sudo dnf install python3-pyside6`).
 
 ### Remix it onto another accent
 

@@ -220,7 +220,8 @@ def ensure_contrast(fg, bg, target=TEXT_TARGET):
 
 
 # Everything but the semantic colours follows the requested accent
-_KEEP = ("id", "title", "is_dark", "positive", "neutral", "negative")
+# semantics beat brand: red still means close/danger in every remix
+_KEEP = ("id", "title", "is_dark", "positive", "neutral", "negative", "pill_close")
 if REMIX:
     for _p in VARIANTS:
         for _k, _v in _p.items():

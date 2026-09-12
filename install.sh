@@ -87,8 +87,27 @@ for item in "${ITEMS[@]}"; do
     echo "  + $item"
 done
 
+# The Tweaks app: copy it, then point its launcher at the installed copy
+APPDIR="$(ls -d "$SRC"/*-tweaks 2>/dev/null | head -1)"
+if [ -n "$APPDIR" ]; then
+    name="$(basename "$APPDIR")"
+    rm -rf "${DEST:?}/$name"
+    cp -a "$APPDIR" "$DEST/$name"
+    chmod +x "$DEST/$name/main.py"
+    mkdir -p "$DEST/applications"
+    for entry in "$SRC"/applications/*.desktop; do
+        [ -e "$entry" ] || continue
+        sed "s|@EXEC@|$DEST/$name/main.py|" "$entry" > "$DEST/applications/$(basename "$entry")"
+    done
+    ITEMS+=("$name" "applications/$(basename "$(ls "$SRC"/applications/*.desktop | head -1)")")
+    echo "  + $name (run it from the launcher, or $DEST/$name/main.py)"
+    command -v update-desktop-database >/dev/null && \
+        update-desktop-database "$DEST/applications" >/dev/null 2>&1 || true
+fi
+
 # What we installed, for ./uninstall.sh --remove
 mkdir -p "$CONF/borealis"
+printf '%s\n' "$HERE" > "$CONF/borealis/project"
 printf '%s\n' "${ITEMS[@]}" > "$CONF/borealis/installed.list"
 
 # Drop stale SVG caches so Plasma re-reads the style

@@ -128,6 +128,26 @@ if [ "$SWITCHER" = 1 ]; then
         echo "no nested DISPLAY ('$DISPLAY'), skipped the live switcher" > "$SANDBOX/xtest.log"
     fi
 fi
+if [ "$TWEAKS" = 1 ]; then
+    "$XDG_DATA_HOME"/*-tweaks/main.py > "$SANDBOX/tweaks.log" 2>&1 &
+    APPID=$!
+    sleep 6
+    shot tweaks
+    stop "$APPID"
+    sleep 1
+fi
+if [ "$REMIX" != "" ]; then
+    # the app's own backend, driven headlessly: rebuild on a new accent and apply
+    python3 "$SANDBOX/remix_test.py" "$REMIX" > "$SANDBOX/remix.log" 2>&1
+    sleep 6
+    shot remixed
+    dolphin --new-window "$HOME" >/dev/null 2>&1 &
+    RPID=$!
+    sleep 5
+    shot remixed-window
+    stop "$RPID"
+    sleep 1
+fi
 if [ "$GTK" = 1 ]; then
     # the sandbox's portal starts mid theme switch and can report the wrong
     # light/dark preference, so tell libadwaita directly
@@ -246,6 +266,26 @@ print("ok", disp)
 """
 
 
+REMIX_TEST = r"""#!/usr/bin/env python3
+# Drives Borealis Tweaks' backend inside the nested session: build a remix on
+# the given accent and apply it here.
+import glob
+import sys
+
+from PySide6.QtCore import QCoreApplication, QTimer
+
+sys.path.insert(0, glob.glob(__import__("os").environ["XDG_DATA_HOME"] + "/*-tweaks")[0])
+from backend import Backend  # noqa: E402
+
+app = QCoreApplication([])
+b = Backend()
+b.logged.connect(lambda line: print(line, flush=True))
+b.finished.connect(lambda ok, msg: (print(f"FINISHED ok={ok} {msg}", flush=True), app.quit()))
+QTimer.singleShot(0, lambda: b.remix(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "Borealis Moss",
+                                     False, False))
+app.exec()
+"""
+
 MAXIMIZE_JS = r"""
 const wins = workspace.windowList();
 for (let i = 0; i < wins.length; i++) {
@@ -300,6 +340,9 @@ def main():
     ap.add_argument("--live", action="store_true", help="also test the animated wallpaper")
     ap.add_argument("--switcher", action="store_true", help="also show the Alt+Tab switcher (preview helper)")
     ap.add_argument("--gtk", action="store_true", help="also show a GTK4/libadwaita dialog")
+    ap.add_argument("--tweaks", action="store_true", help="also open the Borealis Tweaks app")
+    ap.add_argument("--remix", metavar="HEX", default="",
+                    help="also remix onto this accent through the app's backend, e.g. '#4fbf6a'")
     args = ap.parse_args()
     if not os.path.isdir(SHARE):
         sys.exit("build/share missing: run ./build.py first")
@@ -329,10 +372,11 @@ def main():
         with open(os.path.join(sandbox, "config", "autostart", app + ".desktop"), "w") as f:
             f.write("[Desktop Entry]\nType=Application\nHidden=true\n")
     if args.gtk:
-        name = "borealis-libadwaita.css"
+        import glob
+        css = glob.glob(os.path.join(SHARE, "gtk", "*", "*-libadwaita.css"))[0]
+        name = os.path.basename(css)
         os.makedirs(os.path.join(sandbox, "config", "gtk-4.0"), exist_ok=True)
-        shutil.copy(os.path.join(SHARE, "gtk", "borealis", name),
-                    os.path.join(sandbox, "config", "gtk-4.0", name))
+        shutil.copy(css, os.path.join(sandbox, "config", "gtk-4.0", name))
         with open(os.path.join(sandbox, "config", "gtk-4.0", "gtk.css"), "w") as f:
             f.write(f"@import 'colors.css';\n@import '{name}';\n")
     if args.switcher:
@@ -369,6 +413,8 @@ def main():
         f.write(ARRANGE_JS)
     with open(os.path.join(sandbox, "hold_alt_tab.py"), "w") as f:
         f.write(HOLD_ALT_TAB)
+    with open(os.path.join(sandbox, "remix_test.py"), "w") as f:
+        f.write(REMIX_TEST)
     for name, js in (("maximize.js", MAXIMIZE_JS), ("restore.js", RESTORE_JS)):
         with open(os.path.join(sandbox, name), "w") as f:
             f.write(js)
@@ -400,6 +446,9 @@ def main():
         "SWITCHER": "1" if args.switcher else "0",
         "OUTSCALE": args.scale,
         "GTK": "1" if args.gtk else "0",
+        "TWEAKS": "1" if args.tweaks else "0",
+        "REMIX": args.remix,
+        "BOREALIS_PROJECT": HERE,
         "VARIANT": args.variant,
         "REAL_DISPLAY": os.environ.get("DISPLAY", ":0"),
     }
