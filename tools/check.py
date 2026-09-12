@@ -55,9 +55,11 @@ def check_shell():
     bad("shell", "syntax errors in " + ", ".join(errs)) if errs else ok("shell", f"{len(files)} scripts")
 
 
-# Modules that only exist inside their host process; a plain QML engine can
-# never resolve them, so their import errors are expected.
-HOST_ONLY = ("org.kde.kwin", "org.kde.plasma.plasmoid", "org.kde.plasma.private")
+# KDE's QML modules either live inside a host process (KWin, plasmashell) or
+# simply aren't installed on a build machine without Plasma — neither says
+# anything about our code, so those import errors are skipped. Everything else
+# (syntax, unknown properties in resolvable types) still fails the check.
+MISSING_MODULE = re.compile(r'module "(org\.kde\.[\w.]+|Qt5Compat[\w.]*)" is not installed')
 
 
 def check_qml():
@@ -79,8 +81,8 @@ def check_qml():
         comp = QQmlComponent(engine, QUrl.fromLocalFile(f))
         for e in comp.errors():
             msg = e.toString()
-            if any(m in msg for m in HOST_ONLY) and "is not installed" in msg:
-                continue        # only resolvable inside plasmashell / KWin
+            if MISSING_MODULE.search(msg):
+                continue        # provided by Plasma at run time
             problems.append(msg)
     del engine
     app.processEvents()
