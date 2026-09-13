@@ -193,23 +193,62 @@ Item {
         }
     }
 
+    // Connections to the windows' own signals. The windows outlive this
+    // script when it's unloaded (an update, the dock turned off), and a
+    // function still connected would keep firing into a script that's gone;
+    // so each is remembered and disconnected again.
+    property var hooks: []
+
     function watch(w) {
         const signals = ["minimizedChanged", "captionChanged", "frameGeometryChanged", "activeChanged",
                          "demandsAttentionChanged", "desktopsChanged", "outputChanged",
                          "fullScreenChanged", "skipTaskbarChanged", "desktopFileNameChanged"];
         for (let i = 0; i < signals.length; i++) {
             const name = signals[i];
-            if (w[name]) {
-                w[name].connect(() => {
-                    if (bridge.debug && name !== "frameGeometryChanged") {
-                        bridge.say(name + ": " + w.caption + " skipTaskbar=" + w.skipTaskbar + " app=" + w.desktopFileName);
-                    }
-                    throttle.poke();
-                });
-            } else if (bridge.debug) {
-                bridge.say("no signal " + name);
+            if (!w[name]) {
+                if (bridge.debug) {
+                    bridge.say("no signal " + name);
+                }
+                continue;
+            }
+            const hook = () => {
+                if (!bridge || !throttle) {
+                    return;             // the script was unloaded under us
+                }
+                if (bridge.debug && name !== "frameGeometryChanged") {
+                    bridge.say(name + ": " + w.caption + " skipTaskbar=" + w.skipTaskbar + " app=" + w.desktopFileName);
+                }
+                throttle.poke();
+            };
+            w[name].connect(hook);
+            bridge.hooks.push({ window: w, name: name, hook: hook });
+        }
+    }
+
+    function unwatch(w) {
+        bridge.hooks = bridge.hooks.filter(h => {
+            if (h.window !== w) {
+                return true;
+            }
+            try {
+                h.window[h.name].disconnect(h.hook);
+            } catch (e) {
+                // the window is already gone, and its connections with it
+            }
+            return false;
+        });
+    }
+
+    Component.onDestruction: {
+        for (let i = 0; i < bridge.hooks.length; i++) {
+            const h = bridge.hooks[i];
+            try {
+                h.window[h.name].disconnect(h.hook);
+            } catch (e) {
+                // already gone
             }
         }
+        bridge.hooks = [];
     }
 
     property string lastSnapshot: ""
@@ -414,6 +453,7 @@ Item {
             throttle.poke();
         }
         function onWindowRemoved(w) {
+            bridge.unwatch(w);
             const p = previewLoader.item;
             if (p && p.visible) {
                 const left = p.entries.filter(e => String(e.id) !== String(w.internalId));

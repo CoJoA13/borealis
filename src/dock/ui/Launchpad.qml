@@ -278,6 +278,9 @@ Window {
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             drag.target: carrier
             drag.threshold: 10
+            // holding an app opens its menu too, for touchpads and touch screens
+            pressAndHoldInterval: 600
+            onPressAndHold: mouse => pad.openMenu(tile, tile.modelData.appId)
             onPressed: mouse => {
                 if (mouse.button === Qt.LeftButton) {
                     glyph.grabToImage(result => {
@@ -339,10 +342,11 @@ Window {
                            Kirigami.Theme.backgroundColor.b, 0.55)
         }
 
-        // a click on the glass, not on an app, leaves
+        // a click on the glass, not on an app, leaves (a right-click there is
+        // more likely a look for a menu than a wish to leave, so it stays)
         MouseArea {
             anchors.fill: parent
-            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            acceptedButtons: Qt.LeftButton
             onClicked: dock.setLaunchpadOpen(false)
         }
         WheelHandler {
