@@ -485,6 +485,55 @@ print(rows[1] if len(rows) > 1 else "")' "$SANDBOX/sdock-two-windows.json")
     stop "$SDPID" "$S1" "$S2"
     sleep 1
 fi
+if [ "$PLASMA" = 1 ]; then
+    # Borealis Tweaks' Plasma pages, driven through their own backends against
+    # this session's KWin and config: title bar, corners, fonts, pointer,
+    # desktops, corners and night light
+    plog="$SANDBOX/plasma-steps.log"
+    pset() { echo "--- $*" >> "$plog"; python3 "$SANDBOX/plasma_set.py" "$@" >> "$plog" 2>&1; }
+    kwrite "$HOME/Projects/borealis/README.md" >/dev/null 2>&1 &
+    P1=$!
+    sleep 5
+    shot plasma-0-before
+    pset windows buttonsSide=left keepAbove=true
+    sleep 2; shot plasma-1-buttons-left
+    pset windows radius=3
+    sleep 3; shot plasma-2-corners-3
+    echo "decoration theme in your kwinrc after the corners: '$(kreadconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme)'" >> "$plog"
+    grep -c "theme=" "$XDG_CONFIG_HOME/kwinrc" >> "$plog" 2>&1
+    pset text 'font={"family":"Noto Serif","size":12}' 'activeFont={"family":"Noto Serif","size":12}'
+    sleep 3; shot plasma-3-fonts
+    qdbus-qt6 org.kde.KWin /KWin org.kde.KWin.reconfigure >> "$plog" 2>&1
+    sleep 2; shot plasma-3b-fonts-reconfigured
+    pset text cursorSize=48
+    sleep 3
+    echo "pointer now: $(kreadconfig6 --file kcminputrc --group Mouse --key cursorTheme) $(kreadconfig6 --file kcminputrc --group Mouse --key cursorSize)" >> "$plog"
+    pset desktop desktopCount=3 topRight=lock edgeSwitch=2
+    sleep 2
+    echo "desktops now: $(busctl --user get-property org.kde.KWin /VirtualDesktopManager org.kde.KWin.VirtualDesktopManager count)" >> "$plog"
+    qdbus-qt6 org.kde.KWin /KWin org.kde.KWin.supportInformation 2>/dev/null | grep -A10 "^Screen Edges" >> "$plog"
+    pset desktop nightLight=sunset nightSchedule=times sunset=19:45 sunrise=07:15
+    sleep 3
+    echo "night time schedule:" >> "$plog"
+    busctl --user --json=short call org.kde.NightTime /org/kde/NightTime/Manager org.kde.NightTime.Manager \
+        Subscribe 'a{sv}' 0 >> "$plog" 2>&1
+    pset desktop topRight=grid
+    sleep 1.5
+    # push into the top-right corner the way a hand would
+    for i in 1 2 3 4; do
+        python3 "$SANDBOX/tap_key.py" "move:$(( SCREEN_W - 3 )),2" >/dev/null 2>&1; sleep 0.15
+        python3 "$SANDBOX/tap_key.py" "move:$(( SCREEN_W - 1 )),0" >/dev/null 2>&1; sleep 0.5
+    done
+    sleep 1.5; shot plasma-4-corner-grid
+    python3 "$SANDBOX/tap_key.py" ff1b >/dev/null 2>&1
+    sleep 1
+    pset windows animationSpeed=6 blurStrength=3 noiseStrength=8
+    sleep 1
+    grep -h -A3 "^\[Effect-blur\]\|^\[org.kde.kdecoration2\]\|^\[NightColor\]\|^\[ElectricBorders\]\|^\[Effect-overview\]" \
+        "$XDG_CONFIG_HOME/kwinrc" >> "$plog" 2>/dev/null
+    stop "$P1"
+    sleep 1
+fi
 if [ "$BAR" = 1 ]; then
     # the standalone bar, under its interpreter copy so KWin shares the window
     # list; a stand-in UDisks2 on the session bus lends it a USB stick
@@ -739,6 +788,52 @@ else:
     print("tapped", hex(code), "on", disp)
 """
 
+PLASMA_SET = r"""# Borealis Tweaks' Plasma pages, driven from their own backends:
+#   plasma_set.py windows|text|input|desktop key=value ...   (radius=N rebuilds the corners)
+import glob, json, os, sys, time
+app_dir = next(iter(glob.glob(os.path.join(os.environ["XDG_DATA_HOME"], "*-tweaks"))), "")
+sys.path.insert(0, app_dir)
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
+from PySide6.QtGui import QGuiApplication
+app = QGuiApplication(["plasma-set"])
+import backend
+import dockpage  # noqa: F401  (the dock's names)
+from desktoppage import DesktopBackend
+from inputpage import InputBackend
+from textpage import TextBackend
+from windowspage import WindowsBackend
+
+
+def spin(seconds):
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        app.processEvents()
+        time.sleep(0.02)
+
+
+tweaks = backend.Backend(app)
+tweaks.logged.connect(lambda line: print("   ", line))
+page = {"windows": WindowsBackend, "text": TextBackend, "input": InputBackend,
+        "desktop": DesktopBackend}[sys.argv[1]](tweaks, app)
+for arg in sys.argv[2:]:
+    key, _, raw = arg.partition("=")
+    if key == "radius":
+        page.applyCornerRadius(int(raw))
+        spin(0.2)
+        end = time.monotonic() + 120
+        while tweaks.busy and time.monotonic() < end:
+            spin(0.2)
+        continue
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        value = raw
+    page.set(key, value)
+page._apply_pending()
+spin(1.5)
+print(sys.argv[1], json.dumps({k: v for k, v in page.values.items() if k != "shortcuts"}, default=str)[:900])
+"""
+
 MPRIS_FAKE = r"""import sys
 from PySide6.QtCore import ClassInfo, Property, QCoreApplication, QObject, QTimer, Slot
 from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusConnection, QDBusMessage
@@ -981,6 +1076,8 @@ def main():
     ap.add_argument("--quicksettings", action="store_true", help="open the Quick Settings widget in a window")
     ap.add_argument("--standalone-dock", action="store_true",
                     help="run the standalone dock with its KWin bridge (hover, click, menu)")
+    ap.add_argument("--plasma", action="store_true",
+                    help="drive Borealis Tweaks' Plasma pages (title bar, corners, fonts, desktops, night light)")
     ap.add_argument("--bar", action="store_true",
                     help="run the standalone bar (menus, tray, notifications, Control Center, drives)")
     ap.add_argument("--remix", metavar="HEX", default="",
@@ -1023,7 +1120,7 @@ def main():
         with open(os.path.join(sandbox, "config", "gtk-4.0", "gtk.css"), "w") as f:
             f.write(f"@import 'colors.css';\n@import '{name}';\n")
     kwinrc = ""
-    if args.switcher or args.standalone_dock or args.bar:
+    if args.switcher or args.standalone_dock or args.bar or args.plasma:
         # sandbox only: let the nested Xwayland's XTest input through unprompted
         kwinrc += "[Xwayland]\nXwaylandEisNoPrompt=true\n\n"
     sdock_bus = sdock_slug = sdock_launchpad = ""
@@ -1105,6 +1202,8 @@ def main():
         f.write(HOLD_ALT_TAB)
     with open(os.path.join(sandbox, "tap_key.py"), "w") as f:
         f.write(TAP_KEY)
+    with open(os.path.join(sandbox, "plasma_set.py"), "w") as f:
+        f.write(PLASMA_SET)
     with open(os.path.join(sandbox, "mpris_fake.py"), "w") as f:
         f.write(MPRIS_FAKE)
     import glob as _glob
@@ -1157,14 +1256,15 @@ def main():
         "SDOCK": "1" if args.standalone_dock else "0", "SDOCK_BUS": sdock_bus, "SDOCK_SLUG": sdock_slug,
         "SDOCK_LAUNCHPAD": sdock_launchpad,
         "BAR": "1" if args.bar else "0", "BAR_BUS": bar_bus, "BAR_APP": bar_app, "BAR_PYTHON": bar_python,
+        "PLASMA": "1" if args.plasma else "0",
         "SCREEN_W": w, "SCREEN_H": h,
     }
     # the standalone dock's and bar's runs walk through every feature, and take a while
-    cmd = ["timeout", str(120 + 210 * args.standalone_dock + 170 * args.bar), "dbus-run-session", "--",
+    cmd = ["timeout", str(120 + 210 * args.standalone_dock + 170 * args.bar + 120 * args.plasma), "dbus-run-session", "--",
            "kwin_wayland", "--virtual", "--no-lockscreen",
            "--width", w, "--height", h,
            "--socket", f"wayland-borealis-{os.getpid()}"]
-    if args.switcher or args.dock or args.standalone_dock or not args.no_extras:
+    if args.switcher or args.dock or args.standalone_dock or args.plasma or not args.no_extras:
         cmd.append("--xwayland")      # only so XTest can reach the nested KWin
     cmd += ["--exit-with-session", script]
     with open(os.path.join(sandbox, "kwin.log"), "w") as log:

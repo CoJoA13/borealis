@@ -360,6 +360,13 @@ class Backend(QObject):
         self._cache.pop("wallpapers", None)
         self.changed.emit()
 
+    def build_flags(self):
+        """build.py's palette flags for the Borealis that's on, so a rebuilt part of a remix keeps its colours."""
+        name, accent = self._state.get("name", "Borealis"), self._state.get("accent", "#8b9cff")
+        if name != "Borealis":
+            return ["--accent", accent, "--name", name]
+        return ["--accent", accent] if accent.lower() != "#8b9cff" else []
+
     @Slot(str, str, bool, bool)
     def remix(self, accent, name, gtk, terminal):
         """Rebuild the whole theme on a new accent and apply it."""

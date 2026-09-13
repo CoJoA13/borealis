@@ -18,6 +18,9 @@ LICENSE = "GPL-3.0-or-later"
 RADIUS = 12          # windows, panels, popups
 RADIUS_CTRL = 8      # buttons, fields, list highlights
 RADIUS_SMALL = 6     # tooltips, small chips
+# window corners on their own: Borealis Tweaks rebuilds just the decoration
+# with another radius (build.py aurorae --window-radius N)
+WINDOW_RADIUS = max(0, min(24, int(os.environ.get("BOREALIS_WINDOW_RADIUS") or RADIUS)))
 FROST_OPACITY = 0.80 # panels / popups (blur behind)
 
 # Package ids and display names (a remix ships alongside the original)

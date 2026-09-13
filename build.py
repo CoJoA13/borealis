@@ -178,7 +178,10 @@ def main(argv):
     ap.add_argument("--name", help='theme name for a remix, e.g. "Borealis Ember"')
     ap.add_argument("--saturation", type=float, help="multiply every colour's saturation")
     ap.add_argument("--out", help="output directory (default build/share)")
+    ap.add_argument("--window-radius", type=int, help="window corner radius in px, 0-24 (default 12)")
     a = ap.parse_args(argv)
+    if a.window_radius is not None:
+        os.environ["BOREALIS_WINDOW_RADIUS"] = str(a.window_radius)
     if a.accent:
         os.environ["BOREALIS_ACCENT"] = a.accent
     if a.name:

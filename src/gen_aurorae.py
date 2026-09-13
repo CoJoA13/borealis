@@ -12,14 +12,15 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from svgkit import fmt  # noqa: E402
-from tokens import AUTHOR, DARK, EMAIL, IDS, LICENSE, LIGHT, VERSION, kde, mix  # noqa: E402
+from tokens import AUTHOR, DARK, EMAIL, IDS, LICENSE, LIGHT, VERSION, WINDOW_RADIUS, kde, mix  # noqa: E402
 
 PAD_L = PAD_R = 24
 PAD_T, PAD_B = 16, 32
 SHADOW_DY = 8          # shadow centre offset (so: 16 above, 32 below, 24 aside)
 SHADOW_EXT = 24        # blur extent
-R_TOP = 12             # rounded titlebar corners
-R_BOT = 4              # bottom corners (<= border so the client never pokes out)
+R_TOP = WINDOW_RADIUS  # rounded titlebar corners (12 unless rebuilt with --window-radius)
+R_BOT = min(4, R_TOP)  # bottom corners (<= border so the client never pokes out)
+R_IN = max(R_TOP - 1, 0)
 BORDER = 4
 TITLE_EDGE_T, TITLE_H, TITLE_EDGE_B = 6, 22, 6
 TITLE = TITLE_EDGE_T + TITLE_H + TITLE_EDGE_B
@@ -143,7 +144,7 @@ def window_shape(piece, w, h, fill, outline, title_fill):
         # outer rounded corner, filled down to the piece bottom
         shape = (f"M{L} {h} V{T + R_TOP} A{R_TOP} {R_TOP} 0 0 1 {L + R_TOP} {T} H{w} V{h} Z")
         path(shape, o_col, o_op)
-        inner = (f"M{L + 1} {h} V{T + R_TOP} A{R_TOP - 1} {R_TOP - 1} 0 0 1 {L + R_TOP} {T + 1} "
+        inner = (f"M{L + 1} {h} V{T + R_TOP} A{R_IN} {R_IN} 0 0 1 {L + R_TOP} {T + 1} "
                  f"H{w} V{h} Z")
         path(inner, title_fill)
         if h > ttl_bottom:
@@ -152,7 +153,7 @@ def window_shape(piece, w, h, fill, outline, title_fill):
         rx = w - PAD_R
         shape = f"M0 {T} H{rx - R_TOP} A{R_TOP} {R_TOP} 0 0 1 {rx} {T + R_TOP} V{h} H0 Z"
         path(shape, o_col, o_op)
-        inner = (f"M0 {T + 1} H{rx - R_TOP} A{R_TOP - 1} {R_TOP - 1} 0 0 1 {rx - 1} {T + R_TOP} "
+        inner = (f"M0 {T + 1} H{rx - R_TOP} A{R_IN} {R_IN} 0 0 1 {rx - 1} {T + R_TOP} "
                  f"V{h} H0 Z")
         path(inner, title_fill)
         if h > ttl_bottom:
@@ -179,13 +180,13 @@ def window_shape(piece, w, h, fill, outline, title_fill):
         by = h - PAD_B
         rb = R_BOT
         path(f"M{L} 0 V{by - rb} A{rb} {rb} 0 0 0 {L + rb} {by} H{w} V0 Z", o_col, o_op)
-        path(f"M{L + 1} 0 V{by - rb} A{rb - 1} {rb - 1} 0 0 0 {L + rb} {by - 1} H{w} V0 Z", fill)
+        path(f"M{L + 1} 0 V{by - rb} A{max(rb - 1, 0)} {max(rb - 1, 0)} 0 0 0 {L + rb} {by - 1} H{w} V0 Z", fill)
     elif piece == "bottomright":
         by = h - PAD_B
         rx = w - PAD_R
         rb = R_BOT
         path(f"M0 {by} H{rx - rb} A{rb} {rb} 0 0 0 {rx} {by - rb} V0 H0 Z", o_col, o_op)
-        path(f"M0 {by - 1} H{rx - rb} A{rb - 1} {rb - 1} 0 0 0 {rx - 1} {by - rb} V0 H0 Z", fill)
+        path(f"M0 {by - 1} H{rx - rb} A{max(rb - 1, 0)} {max(rb - 1, 0)} 0 0 0 {rx - 1} {by - rb} V0 H0 Z", fill)
     return "".join(out)
 
 
@@ -325,6 +326,10 @@ def rc(p):
         f"PaddingRight={PAD_R}",
         f"PaddingTop={PAD_T}",
         f"PaddingBottom={PAD_B}",
+        "",
+        # Aurorae skips groups it doesn't know; Borealis Tweaks reads this back
+        "[Borealis]",
+        f"CornerRadius={R_TOP}",
         "",
     ])
 

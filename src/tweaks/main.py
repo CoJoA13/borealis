@@ -2,7 +2,8 @@
 """Borealis Tweaks: a small desktop app for the Borealis theme.
 
     borealis-tweaks           open the window
-    borealis-tweaks --page dock   open it on the Dock page (or theme, bar, controls, system)
+    borealis-tweaks --page dock   open it on the Dock page (or theme, bar, controls, windows,
+                                  text, input, desktop, system)
     BOREALIS_PROJECT=~/src/Borealis borealis-tweaks     use another checkout
 """
 import os
@@ -21,9 +22,19 @@ except ImportError:
 from backend import Backend  # noqa: E402
 from dockpage import DockBackend  # noqa: E402
 from barpage import BarBackend  # noqa: E402
+from desktoppage import DesktopBackend  # noqa: E402
+from inputpage import InputBackend  # noqa: E402
+from textpage import TextBackend  # noqa: E402
+from windowspage import WindowsBackend  # noqa: E402
 
 # the pages in ui/main.qml's sidebar, by name
-PAGES = ("theme", "bar", "controls", "dock", "system")
+PAGES = ("theme", "bar", "controls", "dock", "windows", "text", "input", "desktop", "system")
+
+
+def plasma_pages(backend, app):
+    """The Plasma settings pages' backends, by the names their pages use."""
+    return {"windowsSettings": WindowsBackend(backend, app), "textSettings": TextBackend(backend, app),
+            "inputSettings": InputBackend(backend, app), "desktopSettings": DesktopBackend(backend, app)}
 
 
 def main():
@@ -42,6 +53,8 @@ def main():
     engine.rootContext().setContextProperty("backend", backend)
     engine.rootContext().setContextProperty("dockSettings", dock)
     engine.rootContext().setContextProperty("barSettings", bar)
+    for name, page in plasma_pages(backend, app).items():
+        engine.rootContext().setContextProperty(name, page)
     engine.rootContext().setContextProperty("startPage", args.page)
     engine.load(QUrl.fromLocalFile(os.path.join(HERE, "ui", "main.qml")))
     if not engine.rootObjects():

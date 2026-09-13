@@ -86,6 +86,8 @@ def main():
     ctx.setContextProperty("backend", backend)
     ctx.setContextProperty("dockSettings", dock)
     ctx.setContextProperty("barSettings", bar)
+    for name, plasma_page in tweaks_main.plasma_pages(backend, app).items():
+        ctx.setContextProperty(name, plasma_page)
     ctx.setContextProperty("startPage", "theme")
     engine.load(QUrl.fromLocalFile(os.path.join(TWEAKS, "ui", "main.qml")))
     if not engine.rootObjects():

@@ -29,6 +29,10 @@ Kirigami.ApplicationWindow {
         bar: barPage,
         controls: controlsPage,
         dock: dockPage,
+        windows: windowsPage,
+        text: textPage,
+        input: inputPage,
+        desktop: desktopPage,
         system: systemPage
     })
 
@@ -88,6 +92,34 @@ Kirigami.ApplicationWindow {
                 onTriggered: root.showPage("dock")
             },
             Kirigami.Action {
+                text: qsTr("Windows")
+                icon.name: "preferences-system-windows"
+                checkable: true
+                checked: root.page === "windows"
+                onTriggered: root.showPage("windows")
+            },
+            Kirigami.Action {
+                text: qsTr("Text & Pointer")
+                icon.name: "preferences-desktop-font"
+                checkable: true
+                checked: root.page === "text"
+                onTriggered: root.showPage("text")
+            },
+            Kirigami.Action {
+                text: qsTr("Touchpad & Keys")
+                icon.name: "input-touchpad"
+                checkable: true
+                checked: root.page === "input"
+                onTriggered: root.showPage("input")
+            },
+            Kirigami.Action {
+                text: qsTr("Desktop")
+                icon.name: "preferences-desktop"
+                checkable: true
+                checked: root.page === "desktop"
+                onTriggered: root.showPage("desktop")
+            },
+            Kirigami.Action {
                 text: qsTr("System")
                 icon.name: "preferences-system"
                 checkable: true
@@ -125,6 +157,26 @@ Kirigami.ApplicationWindow {
     Component {
         id: dockPage
         DockPage {}
+    }
+
+    Component {
+        id: windowsPage
+        WindowsPage {}
+    }
+
+    Component {
+        id: textPage
+        TextPage {}
+    }
+
+    Component {
+        id: inputPage
+        InputPage {}
+    }
+
+    Component {
+        id: desktopPage
+        DesktopPage {}
     }
 
     Component {

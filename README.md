@@ -163,6 +163,7 @@ tools/check.py              # QML, SVG, JSON, package, Plymouth and WCAG checks
 tools/contrast.py           # just the WCAG audit, pair by pair
 tools/tweakscheck.py        # every Borealis Tweaks page, narrow and wide, off-screen
 tools/barcheck.py           # the bar's Control Center, every page and edit mode, with stand-in backends
+tools/plasmacheck.py        # what each Plasma settings page writes, into a throwaway config
 tools/testsession.py dark   # screenshots from an isolated, off-screen Plasma session
 tools/package.py            # KDE Store archives → dist/ (see STORE.md)
 ```
@@ -328,16 +329,33 @@ launcher. Its sidebar has a page for each part of Borealis:
 - **Theme** switches between Dark, Light and day/night, turns the animated
   aurora on or off, and rebuilds the whole theme around a colour you pick
   (seven presets or a custom colour).
+- **Bar** and **Control Center** set up the Borealis Bar (see above).
 - **Dock** has every setting of the standalone dock, with presets you can save,
   import and export. Sliders show their value as you drag.
+- **Windows**: which title bar buttons show and on which side, how round the
+  window corners are (just the decoration is rebuilt, in a few seconds), the
+  blur and grain behind glass, and how fast things animate.
+- **Text & Pointer**: each of Plasma's fonts and its size, smoothing, hinting
+  and sub-pixel order, the pointer theme and size, and icon sizes in KDE apps.
+- **Touchpad & Keys**: tap to click, tap and drag, what a two-finger tap does,
+  right-clicking by the corner or with two fingers, pointer and scroll speed,
+  natural scrolling and staying off while you type; and the shortcuts for
+  Launchpad (a lone Meta too), Overview, the desktop grid, peeking at the
+  desktop, search, locking, screenshots and switching desktops.
+- **Desktop**: how many virtual desktops, their rows and names; what each hot
+  corner does and whether screen edges switch desktops; night light (sunset to
+  sunrise, at set times or always, and how warm); single or double click.
 - **System** covers what lives outside Plasma: copying the theme system-wide
   for the login screen, the boot splash and boot menu, the Inter and JetBrains
   Mono fonts, GTK and Flatpak apps, Konsole's profile, the command-line colours,
   Firefox, and restoring any earlier backup.
 
-The heavy lifting is the same `build.py`, `install.sh` and `install-system.sh`
-used here, so anything it does can be undone from the terminal. Open it on a
-page with `--page dock` or `--page system`. It needs PySide6
+The Plasma pages write the same settings Plasma's own settings pages do and
+apply them at once; each section's Reset button returns to the Borealis
+defaults. The heavy lifting elsewhere is the same `build.py`, `install.sh` and
+`install-system.sh` used here, so anything it does can be undone from the
+terminal. Open it on a page with `--page windows` (or `theme`, `bar`,
+`controls`, `dock`, `text`, `input`, `desktop`, `system`). It needs PySide6
 (`sudo dnf install python3-pyside6`).
 
 `--konsole`, `--gtk`, `--flatpak`, `--terminal` and `--firefox` also work
