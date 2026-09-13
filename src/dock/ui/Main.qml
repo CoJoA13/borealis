@@ -1,6 +1,6 @@
 /*
-    Borealis Dock: one surface per screen it lives on, and the overlay its
-    menus open in.
+    Borealis Dock: one surface per screen it lives on, the overlay its menus
+    open in, and Launchpad.
     SPDX-License-Identifier: GPL-3.0-or-later
 */
 import QtQuick
@@ -18,4 +18,6 @@ QtObject {
     }
 
     property var overlay: Overlay {}
+
+    property var launchpad: Launchpad {}
 }

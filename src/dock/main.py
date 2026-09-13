@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """Borealis Dock: a standalone, macOS-style dock for KDE Plasma on Wayland.
 
-    borealis-dock              run the dock (normally started by systemd)
-    borealis-dock --settings   open its settings in Borealis Tweaks
+    borealis-dock                      run the dock (normally started by systemd)
+    borealis-dock --settings           open its settings in Borealis Tweaks
+    borealis-dock --launchpad          open or close Launchpad
+    borealis-dock --list-presets       the looks to choose from
+    borealis-dock --preset macos       switch to one (or to a preset file someone shared)
+    borealis-dock --export-preset F    save the current look to share [--with-apps]
 
 A layer-shell surface per screen draws the dock; the KWin script next to it
 reports the open windows over D-Bus and carries out window commands.
 """
 import os
 import signal
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.realpath(__file__))
@@ -25,10 +30,47 @@ def open_settings():
     os.execvp("kioclient", ["kioclient", "exec", path])
 
 
+def preset_command(args):
+    """Presets from the command line edit the settings file; a running dock follows it."""
+    import presets
+    import settings
+    path = settings.config_path()
+    values = settings.load_values(path)
+    if args.list_presets:
+        current = presets.current_id(values)
+        for p in presets.all_presets():
+            mark = "*" if p["id"] == current else " "
+            print(f"{mark} {p['id']:<22} {p['name']}" + (f"  ({p['description']})" if p["description"] else ""))
+        return 0
+    if args.export_preset:
+        name = os.path.splitext(os.path.basename(args.export_preset))[0]
+        print(presets.write(args.export_preset, name, values, args.with_apps))
+        return 0
+    if os.path.isfile(os.path.expanduser(args.preset)):
+        try:
+            preset = presets.read(args.preset)
+        except ValueError as e:
+            sys.exit(f"{args.preset}: {e}")
+    else:
+        preset = presets.find(args.preset)
+        if preset is None:
+            sys.exit(f"there's no preset called {args.preset!r} (see --list-presets)")
+    settings.write_values(path, presets.apply(values, preset, args.with_apps))
+    print(f"{ids.NAME} Dock: {preset['name']}")
+    return 0
+
+
 def main():
     import argparse
     ap = argparse.ArgumentParser(prog=f"{ids.SLUG}-dock", description=f"{ids.NAME} Dock")
     ap.add_argument("--settings", action="store_true", help="open the dock settings")
+    ap.add_argument("--launchpad", action="store_true", help="open or close Launchpad in the running dock")
+    ap.add_argument("--list-presets", action="store_true", help="the presets there are (* is the one in use)")
+    ap.add_argument("--preset", metavar="NAME|FILE",
+                    help="switch to a preset (borealis, macos, minimal, one you saved) or a preset file")
+    ap.add_argument("--export-preset", metavar="FILE", help="save the current look as a preset file")
+    ap.add_argument("--with-apps", action="store_true",
+                    help="with --preset or --export-preset: the pinned apps and Stacks as well")
     ap.add_argument("--version", action="store_true")
     args = ap.parse_args()
     if args.version:
@@ -36,6 +78,10 @@ def main():
         return 0
     if args.settings:
         return open_settings()
+    if args.launchpad:
+        return subprocess.call(["busctl", "--user", "call", ids.BUS, ids.PATH, ids.INTERFACE, "ToggleLaunchpad"])
+    if args.list_presets or args.preset or args.export_preset:
+        return preset_command(args)
 
     # exactly what LayerShellQt::Shell::useLayerShell() does, before any window exists
     os.environ["QT_WAYLAND_SHELL_INTEGRATION"] = "layer-shell"
@@ -50,9 +96,11 @@ def main():
     from badges import Badges
     from bridge import Bridge, DockService
     from controller import Controller
+    from launchpad import AppGrid
     from model import DockModel
     from settings import Settings
     from stacks import StackIndex
+    from widgets import Battery, Media
 
     app = QGuiApplication(sys.argv)
     # Qt picked its shell integration while starting up; apps launched from the
@@ -75,8 +123,13 @@ def main():
     bridge = Bridge(parent=app)
     badges = Badges(parent=app)
     stacks = StackIndex(parent=app)
-    model = DockModel(settings, apps, bridge, badges=badges, stacks=stacks, parent=app)
-    controller = Controller(app, settings, apps, bridge, model, stacks=stacks, parent=app)
+    battery = Battery(parent=app)
+    media = Media(apps, parent=app)
+    grid = AppGrid(apps, parent=app)
+    model = DockModel(settings, apps, bridge, badges=badges, stacks=stacks, battery=battery, media=media,
+                      parent=app)
+    controller = Controller(app, settings, apps, bridge, model, stacks=stacks, battery=battery, media=media,
+                            launchpad=grid, parent=app)
     service = DockService(bridge, controller, parent=app)
     if not bus.registerObject(ids.PATH, ids.INTERFACE, service,
                               QDBusConnection.RegisterOption.ExportAllSlots):

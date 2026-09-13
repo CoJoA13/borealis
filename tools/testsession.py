@@ -378,6 +378,100 @@ print(rows[1] if len(rows) > 1 else "")' "$SANDBOX/sdock-two-windows.json")
         shot sdock-stack-grid
         tap "click:200,300"; sleep 1
         stop "$S3" "$EMITTER"
+
+        # ---- previews, Launchpad, widgets, presets -------------------------
+        dolphin --new-window "$HOME/Music" >/dev/null 2>&1 &
+        S4=$!
+        sleep 4
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 0.5
+        layout previews
+        DX=$(at_of previews "$SCREEN_W" org.kde.dolphin)
+        # rest on Dolphin (two windows): live previews above it
+        tap "move:$(( DX - 30 )),$Y"; sleep 0.2
+        tap "move:$DX,$Y"; sleep 1.8
+        sd State > "$SANDBOX/sdock-state-preview.json"
+        shot sdock-preview
+        # up into them: they stay, and a click switches to that window
+        tap "move:$DX,$(( Y - 90 ))"; sleep 0.25
+        tap "move:$(( DX - 60 )),$(( Y - 170 ))"; sleep 1
+        sd State > "$SANDBOX/sdock-state-preview-hover.json"
+        shot sdock-preview-hover
+        tap "click:$(( DX - 110 )),$(( Y - 170 ))"; sleep 1.5
+        sd State > "$SANDBOX/sdock-state-preview-click.json"
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 1
+        shot sdock-preview-clicked
+        # Launchpad: its dock icon, then typing and Return
+        LX=$(at_of previews "$SCREEN_W" launchpad)
+        tap "move:$(( LX + 30 )),$Y"; sleep 0.2
+        tap "click:$LX,$Y"; sleep 1.5
+        shot sdock-launchpad
+        for k in 006b 0063 0061 006c; do tap "$k"; sleep 0.15; done
+        sleep 1.5
+        sd State > "$SANDBOX/sdock-state-launchpad.json"
+        shot sdock-launchpad-search
+        tap ff0d; sleep 3
+        layout launchpad-launched
+        sd State > "$SANDBOX/sdock-state-launchpad-closed.json"
+        # Meta+Space opens it anywhere; Escape leaves
+        tap "chord:ffeb+0020"; sleep 1.5
+        sd State > "$SANDBOX/sdock-state-launchpad-key.json"
+        tap ff1b; sleep 1
+        # a lone Meta works too, once given to Launchpad in the shortcut settings
+        # (here: taken from Plasma's launcher, which holds it by default)
+        busctl --user call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setForeignShortcutKeys 'asa(ai)' \
+            4 plasmashell "activate application launcher" plasmashell "Activate Application Launcher" \
+            1 1 $(( 0x08000000 | 0x01000030 )) >> "$SANDBOX/sdock-input.log" 2>&1
+        busctl --user call org.kde.kglobalaccel /kglobalaccel org.kde.KGlobalAccel setForeignShortcutKeys 'asa(ai)' \
+            4 kwin "$SDOCK_LAUNCHPAD" KWin "$SDOCK_LAUNCHPAD" \
+            2 1 $(( 0x10000000 | 0x20 )) 1 $(( 0x01000022 )) >> "$SANDBOX/sdock-input.log" 2>&1
+        sleep 1
+        tap ffeb; sleep 1.5
+        sd State > "$SANDBOX/sdock-state-meta.json"
+        tap ff1b; sleep 1
+        # widgets: a clock, the battery, and a player saying what's playing
+        python3 "$SANDBOX/mpris_fake.py" "file://$XDG_DATA_HOME/wallpapers/Borealis/contents/images/1280x1024.jpg" \
+            >> "$SANDBOX/sdock-input.log" 2>&1 &
+        PLAYER=$!
+        settle '{"widgets": [{"type": "clock", "style": "analog"}, {"type": "battery"}, {"type": "media"}]}'
+        sleep 3
+        layout widgets
+        sd State > "$SANDBOX/sdock-state-widgets.json"
+        shot sdock-widgets
+        MX=$(at_of widgets "$SCREEN_W" media)
+        if [ "$MX" -ge 0 ]; then
+            tap "move:$(( MX - 30 )),$Y"; sleep 0.2
+            tap "move:$MX,$Y"; sleep 1
+            shot sdock-widget-label
+            tap "click:$MX,$Y"; sleep 1.5
+            sd State > "$SANDBOX/sdock-state-paused.json"
+        fi
+        CX=$(at_of widgets "$SCREEN_W" clock)
+        tap "click:$CX,$Y"; sleep 1.5
+        shot sdock-calendar
+        tap ff1b; sleep 1
+        BX=$(at_of widgets "$SCREEN_W" battery)
+        if [ "$BX" -ge 0 ]; then
+            # look only: its menu switches the machine's real power mode
+            tap "click:$BX,$Y"; sleep 1.5
+            shot sdock-battery-menu
+            tap ff1b; sleep 1
+        fi
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 0.5
+        # presets from the command line: the dock follows its settings file
+        DOCKCMD=$(ls "$XDG_DATA_HOME"/*-dock/main.py)
+        "$DOCKCMD" --preset macos >> "$SANDBOX/sdock-input.log" 2>&1; sleep 3
+        tap "move:$(( SCREEN_W / 2 - 80 )),$Y"; sleep 0.3
+        tap "move:$(( SCREEN_W / 2 )),$Y"; sleep 1
+        shot sdock-preset-macos
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 0.5
+        "$DOCKCMD" --preset minimal >> "$SANDBOX/sdock-input.log" 2>&1; sleep 2
+        tap "move:$(( SCREEN_W / 2 )),$(( SCREEN_H - 1 ))"; sleep 1.5
+        shot sdock-preset-minimal
+        "$DOCKCMD" --list-presets >> "$SANDBOX/sdock-input.log" 2>&1
+        "$DOCKCMD" --export-preset "$SANDBOX/shared-preset.json" >> "$SANDBOX/sdock-input.log" 2>&1
+        "$DOCKCMD" --preset borealis >> "$SANDBOX/sdock-input.log" 2>&1
+        tap "move:$(( SCREEN_W / 2 )),300"; sleep 2
+        stop "$PLAYER" "$S4"
         # the dock's page in Borealis Tweaks
         "$XDG_DATA_HOME"/*-tweaks/main.py --page dock > "$SANDBOX/sdock-tweaks.log" 2>&1 &
         TW=$!
@@ -568,6 +662,86 @@ else:
     print("tapped", hex(code), "on", disp)
 """
 
+MPRIS_FAKE = r"""import sys
+from PySide6.QtCore import ClassInfo, Property, QCoreApplication, QObject, QTimer, Slot
+from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusConnection, QDBusMessage
+
+# a media player as the dock sees one: MPRIS on the session bus
+ART = sys.argv[1] if len(sys.argv) > 1 else ""
+
+
+@ClassInfo({"D-Bus Interface": "org.mpris.MediaPlayer2"})
+class Root(QDBusAbstractAdaptor):
+    @Property(str)
+    def Identity(self):
+        return "Elisa"
+
+    @Property(str)
+    def DesktopEntry(self):
+        return "org.kde.elisa"
+
+    @Property(bool)
+    def CanRaise(self):
+        return True
+
+    @Slot()
+    def Raise(self):
+        print("player: raise", flush=True)
+
+
+@ClassInfo({"D-Bus Interface": "org.mpris.MediaPlayer2.Player"})
+class Player(QDBusAbstractAdaptor):
+    status = "Playing"
+
+    @Property(str)
+    def PlaybackStatus(self):
+        return Player.status
+
+    @Property("QVariantMap")
+    def Metadata(self):
+        return {"xesam:title": "Northern Lights", "xesam:artist": ["Aurora Band"], "mpris:artUrl": ART}
+
+    @Property(bool)
+    def CanGoNext(self):
+        return True
+
+    @Property(bool)
+    def CanGoPrevious(self):
+        return True
+
+    @Property(bool)
+    def CanPause(self):
+        return True
+
+    @Property(bool)
+    def CanPlay(self):
+        return True
+
+    @Slot()
+    def PlayPause(self):
+        Player.status = "Paused" if Player.status == "Playing" else "Playing"
+        print("player:", Player.status, flush=True)
+        msg = QDBusMessage.createSignal("/org/mpris/MediaPlayer2", "org.freedesktop.DBus.Properties",
+                                        "PropertiesChanged")
+        msg.setArguments(["org.mpris.MediaPlayer2.Player", {"PlaybackStatus": Player.status}, []])
+        QDBusConnection.sessionBus().send(msg)
+
+    @Slot()
+    def Next(self):
+        print("player: next", flush=True)
+
+
+app = QCoreApplication(sys.argv)
+holder = QObject()
+Root(holder)
+Player(holder)
+bus = QDBusConnection.sessionBus()
+print("player registered:", bus.registerObject("/org/mpris/MediaPlayer2", holder),
+      bus.registerService("org.mpris.MediaPlayer2.elisa"), flush=True)
+QTimer.singleShot(180000, app.quit)
+app.exec()
+"""
+
 MAXIMIZE_JS = r"""
 const wins = workspace.windowList();
 for (let i = 0; i < wins.length; i++) {
@@ -671,7 +845,7 @@ def main():
     if args.switcher or args.standalone_dock:
         # sandbox only: let the nested Xwayland's XTest input through unprompted
         kwinrc += "[Xwayland]\nXwaylandEisNoPrompt=true\n\n"
-    sdock_bus = sdock_slug = ""
+    sdock_bus = sdock_slug = sdock_launchpad = ""
     if args.standalone_dock:
         import glob
         import re
@@ -683,6 +857,7 @@ def main():
         ids_text = open(os.path.join(app, "ids.py")).read()
         sdock_bus = re.search(r"^BUS = ['\"](.+)['\"]$", ids_text, re.M).group(1)
         sdock_slug = re.search(r"^SLUG = ['\"](.+)['\"]$", ids_text, re.M).group(1)
+        sdock_launchpad = re.search(r"^LAUNCHPAD_SHORTCUT = ['\"](.+)['\"]$", ids_text, re.M).group(1)
         # the layout script asks applicationExists() for the dock's command
         os.symlink(os.path.join(app, "main.py"), os.path.join(fakebin, os.path.basename(app)))
         # apps launched with files go through systemd-run: run them directly here
@@ -724,6 +899,8 @@ def main():
         f.write(HOLD_ALT_TAB)
     with open(os.path.join(sandbox, "tap_key.py"), "w") as f:
         f.write(TAP_KEY)
+    with open(os.path.join(sandbox, "mpris_fake.py"), "w") as f:
+        f.write(MPRIS_FAKE)
     import glob as _glob
     dock_id = os.path.basename(next(iter(_glob.glob(os.path.join(SHARE, "plasma", "plasmoids", "*.dock"))), "org.borealis.dock"))
     with open(os.path.join(sandbox, "swapdock.js"), "w") as f:
@@ -772,9 +949,11 @@ def main():
         "VARIANT": args.variant,
         "REAL_DISPLAY": os.environ.get("DISPLAY", ":0"),
         "SDOCK": "1" if args.standalone_dock else "0", "SDOCK_BUS": sdock_bus, "SDOCK_SLUG": sdock_slug,
+        "SDOCK_LAUNCHPAD": sdock_launchpad,
         "SCREEN_W": w, "SCREEN_H": h,
     }
-    cmd = ["timeout", "120", "dbus-run-session", "--",
+    # the standalone dock's run walks through every feature, and takes a while
+    cmd = ["timeout", "330" if args.standalone_dock else "120", "dbus-run-session", "--",
            "kwin_wayland", "--virtual", "--no-lockscreen",
            "--width", w, "--height", h,
            "--socket", f"wayland-borealis-{os.getpid()}"]

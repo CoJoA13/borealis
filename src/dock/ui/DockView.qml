@@ -32,6 +32,7 @@ Item {
 
     // ---- magnification ----------------------------------------------------
     property real pointer: dock.pointerOverride
+    property real pointerY: -1
     property real focusAt: dock.pointerOverride
     onPointerChanged: if (pointer >= 0) {
         focusAt = pointer;
@@ -57,14 +58,17 @@ Item {
 
     // ---- hiding -------------------------------------------------------------
     readonly property string screenName: window.screen ? window.screen.name : ""
+    // previews this dock asked for: while the pointer is on them, the dock is in use
+    property bool previewMine: false
     readonly property bool hoveredDock: hover.hovered || edgeHover.hovered || dropArea.containsDrag
-        || dock.pointerOverride >= 0
+        || dock.pointerOverride >= 0 || (previewMine && dock.previewHovered)
     property bool dragging: false
     property bool covered: false
     property bool autoHidden: false
     property bool revealHold: false
     readonly property bool fullscreenHere: dock.windowsRevision >= 0 && dock.fullscreenOn(screenName)
     readonly property bool hidden: !hoveredDock && !dragging && !dock.menuOpen && !revealHold
+        && !dock.launchpadDragging
         && (fullscreenHere || (cfg.hide === "dodge" && covered) || (cfg.hide === "auto" && autoHidden))
 
     Timer {
@@ -82,6 +86,15 @@ Item {
         interval: 700
         onTriggered: view.revealHold = false
     }
+    // the pointer left the dock, perhaps for the previews: let go of the swell a little later
+    Timer {
+        id: releaseTimer
+        interval: 420
+        onTriggered: if (!hover.hovered && !view.dragging && !(view.previewMine && dock.previewHovered)) {
+            view.pointer = dock.pointerOverride;
+            view.pointerY = -1;
+        }
+    }
     Connections {
         target: dock
         function onWindowsRevisionChanged() {
@@ -91,6 +104,14 @@ Item {
             const it = repeater.itemAt(row);
             if (it) {
                 view.openMenu(it);
+            }
+        }
+        function onPreviewChanged() {
+            if (!dock.previewVisible && dock.previewRow < 0) {
+                view.previewMine = false;
+            }
+            if (!dock.previewHovered && !hover.hovered && !view.dragging && dock.pointerOverride < 0) {
+                releaseTimer.restart();
             }
         }
     }
@@ -187,19 +208,80 @@ Item {
         return -1;
     }
 
-    function openMenu(it) {
+    // an item's rectangle relative to its screen, for popups that open beside it
+    function screenRectOf(it) {
         const r = it ? it.mapToItem(null, 0, 0, it.width, it.height)
                      : shelf.mapToItem(null, 0, 0, shelf.width, shelf.height);
         const g = dock.screenRect(window);
         const o = screenOrigin();
-        dock.requestMenu(it ? it.index : -1, window, o.x - g.x + r.x, o.y - g.y + r.y, r.width, r.height, edge);
+        return Qt.rect(o.x - g.x + r.x, o.y - g.y + r.y, r.width, r.height);
+    }
+
+    function openMenu(it) {
+        const r = screenRectOf(it);
+        dock.requestMenu(it ? it.index : -1, window, r.x, r.y, r.width, r.height, edge);
     }
 
     function openStack(it) {
+        const r = screenRectOf(it);
+        dock.requestStack(it.index, window, r.x, r.y, r.width, r.height, edge);
+    }
+
+    function openCalendar(it) {
+        const r = screenRectOf(it);
+        dock.requestCalendar(it.index, window, r.x, r.y, r.width, r.height, edge);
+    }
+
+    // ---- window previews ------------------------------------------------------
+    // The KWin bridge draws them; the dock says which app and where its icon is.
+    readonly property int hoveredRow: hoveredDock && !dragging && !dropArea.containsDrag && !dock.menuOpen
+        && !dock.launchpadOpen && dock.pointerOverride < 0 && pointer >= 0 ? rowAt(pointer) : -1
+    property int previewTarget: -1
+
+    Timer {
+        id: previewTimer
+        onTriggered: view.showPreview()
+    }
+    onHoveredRowChanged: updatePreviewTarget()
+    onPointerYChanged: if (hoveredRow >= 0 || previewTarget >= 0) {
+        updatePreviewTarget();
+    }
+
+    function updatePreviewTarget() {
+        const row = hoveredRow;
+        const it = row >= 0 ? repeater.itemAt(row) : null;
+        const showing = previewMine && (dock.previewVisible || dock.previewRow >= 0);
+        // above the icons, on the way up to the previews: keep what's showing
+        if (it && showing && pointerY < it.y - 4) {
+            return;
+        }
+        if (!it || it.kind !== "app" || it.windowCount === 0 || !cfg.previews) {
+            previewTarget = -1;
+            previewTimer.stop();
+            if (previewMine) {
+                dock.previewLeave();
+            }
+            return;
+        }
+        if (row === previewTarget) {
+            return;
+        }
+        previewTarget = row;
+        // one already up follows the pointer quickly; a new one waits a moment
+        previewTimer.interval = showing ? 120 : Math.max(60, cfg.previewDelay);
+        previewTimer.restart();
+    }
+
+    function showPreview() {
+        const it = previewTarget >= 0 && previewTarget === hoveredRow ? repeater.itemAt(previewTarget) : null;
+        if (!it || it.kind !== "app" || it.windowCount === 0) {
+            return;
+        }
         const r = it.mapToItem(null, 0, 0, it.width, it.height);
-        const g = dock.screenRect(window);
         const o = screenOrigin();
-        dock.requestStack(it.index, window, o.x - g.x + r.x, o.y - g.y + r.y, r.width, r.height, edge);
+        if (dock.requestPreview(it.index, window, o.x + r.x, o.y + r.y, r.width, r.height, edge)) {
+            previewMine = true;
+        }
     }
 
     // ---- dragging icons -----------------------------------------------------
@@ -209,6 +291,8 @@ Item {
     readonly property bool removing: dragging && shelfY - dragY > thickness + iconSize * 0.5
 
     function beginDrag(it) {
+        dock.previewHide();
+        previewTarget = -1;
         dragRow = it.index;
         dragging = true;
     }
@@ -301,9 +385,19 @@ Item {
                 id: hover
                 onPointChanged: if (hovered) {
                     view.pointer = point.position.x + hoverZone.x;
+                    view.pointerY = point.position.y + hoverZone.y;
                 }
-                onHoveredChanged: if (!hovered && !view.dragging) {
-                    view.pointer = dock.pointerOverride;
+                onHoveredChanged: {
+                    if (hovered) {
+                        releaseTimer.stop();
+                    } else if (!view.dragging) {
+                        if (view.previewMine && (dock.previewVisible || dock.previewRow >= 0)) {
+                            releaseTimer.restart();
+                        } else {
+                            view.pointer = dock.pointerOverride;
+                            view.pointerY = -1;
+                        }
+                    }
                 }
             }
         }

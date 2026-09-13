@@ -7,6 +7,7 @@ systemd user unit; their Exec lines are completed at install time.
 """
 import os
 import shutil
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -16,6 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCE_BUS = "org.borealis.Dock"
 SOURCE_SHORTCUT = "Borealis Dock: sync"
 SOURCE_SLOT_SHORTCUT = "Borealis Dock: activate app "
+SOURCE_LAUNCHPAD_SHORTCUT = "Borealis Dock: Launchpad"
 
 
 def shortcut():
@@ -36,6 +38,7 @@ def ids_py():
         f"INTERFACE = {IDS['dockbus'] + '1'!r}\n"
         f"BRIDGE = {IDS['dockbridge']!r}\n"
         f"SHORTCUT = {shortcut()!r}\n"
+        f"LAUNCHPAD_SHORTCUT = {NAME + ' Dock: Launchpad'!r}\n"
     )
 
 
@@ -97,9 +100,15 @@ def bridge(out_root):
     text = (text.replace(f'"{SOURCE_BUS}1"', f'"{IDS["dockbus"]}1"')
                 .replace(f'"{SOURCE_BUS}"', f'"{IDS["dockbus"]}"')
                 .replace(f'"{SOURCE_SHORTCUT}"', f'"{shortcut()}"')
-                .replace(f'"{SOURCE_SLOT_SHORTCUT}"', f'"{NAME} Dock: activate app "'))
+                .replace(f'"{SOURCE_SLOT_SHORTCUT}"', f'"{NAME} Dock: activate app "')
+                .replace(f'"{SOURCE_LAUNCHPAD_SHORTCUT}"', f'"{NAME} Dock: Launchpad"'))
     with open(qml, "w") as f:
         f.write(text)
+    # the previews' rounded corners: the Alt+Tab switcher's mask shader
+    qsb = shutil.which("qsb") or "/usr/lib64/qt6/bin/qsb"
+    subprocess.run([qsb, "--glsl", "100 es,120,150", "--hlsl", "50", "--msl", "12",
+                    "-o", os.path.join(dest, "contents", "ui", "roundedmask.frag.qsb"),
+                    os.path.join(HERE, "switcher", "roundedmask.frag")], check=True)
     return dest
 
 

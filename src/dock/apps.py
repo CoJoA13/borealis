@@ -61,7 +61,8 @@ def exec_binary(line):
 
 
 class Entry:
-    __slots__ = ("id", "path", "name", "icon", "exec", "terminal", "wmclass", "actions", "listed")
+    __slots__ = ("id", "path", "name", "icon", "exec", "terminal", "wmclass", "actions", "listed",
+                 "generic", "comment", "keywords", "categories")
 
     def __init__(self, **kw):
         for key in self.__slots__:
@@ -104,7 +105,10 @@ def parse_entry(path, entry_id):
                  terminal=_true(main.get("Terminal", "")),
                  wmclass=main.get("StartupWMClass", ""), actions=actions,
                  listed=not _true(main.get("NoDisplay", "")) and (not only or "KDE" in only)
-                 and "KDE" not in never)
+                 and "KDE" not in never,
+                 generic=_localized(main, "GenericName"), comment=_localized(main, "Comment"),
+                 keywords=[k for k in _localized(main, "Keywords").split(";") if k.strip()],
+                 categories=[c for c in main.get("Categories", "").split(";") if c])
 
 
 def find_entry_path(entry_id):

@@ -16,12 +16,16 @@ try:                        # installed: copies made by gen_tweaks.py
     import ids
     import docksettings
     import dockstacks
+    import dockpresets
 except ImportError:         # the source tree: use the dock's own modules
     import sys
     sys.path.insert(1, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "dock"))
     import ids
     import settings as docksettings
     import stacks as dockstacks
+    import presets as dockpresets
+
+WIDGET_ORDER = ("clock", "battery", "media")
 
 from backend import PROJECT
 
@@ -44,8 +48,9 @@ class DockBackend(QObject):
                                             QDBusServiceWatcher.WatchModeFlag.WatchForOwnerChange, self)
         self._watcher.serviceOwnerChanged.connect(lambda *_: self.stateChanged.emit())
         backend.finished.connect(lambda *_: self.stateChanged.emit())
-        # which key KWin gave Meta+1: asked in the background, never blocking the page
+        # which keys KWin gave Meta+1 and Launchpad: asked in the background, never blocking the page
         self._shortcut_key = ""
+        self._launchpad_key = ""
         self._probe = QProcess(self)
         self._probe.finished.connect(self._probed)
         self._reprobe = QTimer(self, singleShot=True, interval=800)
@@ -82,23 +87,98 @@ class DockBackend(QObject):
                                          "/component/kwin", "org.kde.kglobalaccel.Component", "allShortcutInfos"])
 
     def _probed(self, *_):
-        key = ""
+        key = launchpad = ""
+        launchpad_name = getattr(ids, "LAUNCHPAD_SHORTCUT", f"{ids.NAME} Dock: Launchpad")
         try:
             infos = json.loads(bytes(self._probe.readAllStandardOutput()).decode())["data"][0]
             for info in infos:
                 # (unique name, friendly name, component, component name, context, context name, keys, defaults)
                 if info[0] == f"{ids.NAME} Dock: activate app 1" and info[6]:
                     key = QKeySequence(info[6][0]).toString()
+                elif info[0] == launchpad_name and info[6]:
+                    launchpad = QKeySequence(info[6][0]).toString()
         except (ValueError, KeyError, IndexError, TypeError):
             pass
-        if key != self._shortcut_key:
-            self._shortcut_key = key
+        if (key, launchpad) != (self._shortcut_key, self._launchpad_key):
+            self._shortcut_key, self._launchpad_key = key, launchpad
             self.stateChanged.emit()
 
     @Property(str, notify=stateChanged)
     def shortcutKey(self):
         """The key KWin gave "activate app 1": empty when something else holds it."""
         return self._shortcut_key
+
+    @Property(str, notify=stateChanged)
+    def launchpadKey(self):
+        return self._launchpad_key
+
+    # -------------------------------------------------------------- presets --
+    @Property("QVariantList", notify=changed)
+    def presets(self):
+        current = dockpresets.current_id(self.values)
+        return [{"id": p["id"], "name": p["name"], "description": p["description"], "builtin": p["builtin"],
+                 "current": p["id"] == current, "hasApps": bool(p.get("apps"))}
+                for p in dockpresets.all_presets()]
+
+    @Slot(str, bool)
+    def applyPreset(self, preset_id, with_apps):
+        preset = dockpresets.find(preset_id)
+        if preset:
+            self._write()
+            self.settings.update(dockpresets.apply(self.settings.values, preset, with_apps))
+
+    @Slot(str, bool, result=str)
+    def savePreset(self, name, with_apps):
+        name = " ".join(str(name).split())
+        if not name:
+            return ""
+        self._write()
+        preset_id = dockpresets.save_user(name, self.settings.values, with_apps)
+        self.changed.emit()
+        return preset_id
+
+    @Slot(str)
+    def deletePreset(self, preset_id):
+        if dockpresets.delete_user(preset_id):
+            self.changed.emit()
+
+    @Slot(str, result=str)
+    def importPreset(self, url):
+        path = QUrl(url).toLocalFile() if url.startswith("file:") else url
+        try:
+            preset_id = dockpresets.import_file(path)
+        except (ValueError, OSError) as e:
+            return f"error:{e}"
+        self.changed.emit()
+        return preset_id
+
+    @Slot(str, bool, result=str)
+    def exportPreset(self, url, with_apps):
+        path = QUrl(url).toLocalFile() if url.startswith("file:") else url
+        if not path.endswith(".json"):
+            path += ".json"
+        self._write()
+        try:
+            return dockpresets.write(path, os.path.splitext(os.path.basename(path))[0], self.settings.values,
+                                     with_apps)
+        except OSError as e:
+            return f"error:{e.strerror or e}"
+
+    # -------------------------------------------------------------- widgets --
+    @Slot(str, bool)
+    def setWidget(self, kind, on):
+        widgets = [dict(w) for w in self.values.get("widgets", [])]
+        if on and all(w["type"] != kind for w in widgets):
+            widgets.append({"type": kind})
+        elif not on:
+            widgets = [w for w in widgets if w["type"] != kind]
+        widgets.sort(key=lambda w: WIDGET_ORDER.index(w["type"]) if w["type"] in WIDGET_ORDER else 99)
+        self.set("widgets", widgets)
+
+    @Slot(str, str, str)
+    def setWidgetOption(self, kind, key, value):
+        self.set("widgets", [dict(w, **{key: value}) if w["type"] == kind else dict(w)
+                             for w in self.values.get("widgets", [])])
 
     @Slot(result="QVariantList")
     def stackRows(self):

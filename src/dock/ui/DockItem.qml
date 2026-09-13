@@ -1,5 +1,6 @@
 /*
-    One place in the dock: an app, the trash, or a divider.
+    One place in the dock: an app, Launchpad, a widget, a Stack, the trash,
+    or a divider.
     SPDX-License-Identifier: GPL-3.0-or-later
 */
 import QtQuick
@@ -28,9 +29,15 @@ Item {
     required property int stackCount
     required property var preview
     required property string display
+    required property string widget
+    required property string widgetStyle
 
     // a Stack shows its newest items piled up; an empty one (or "folder") its icon
     readonly property bool piled: kind === "stack" && display === "stack" && preview.length > 0
+    // Launchpad and the widgets draw themselves instead of showing a themed icon
+    readonly property bool drawn: kind === "launchpad" || kind === "widget"
+    // this app's window previews are showing
+    readonly property bool previewing: dock.previewVisible && dock.previewRow === index && host.previewMine
 
     readonly property real span: kind === "divider" ? host.dividerSpan : host.iconSize
     property bool settled: false
@@ -75,12 +82,42 @@ Item {
 
     Kirigami.Icon {
         id: glyph
-        visible: item.kind !== "divider" && !item.piled
+        visible: item.kind !== "divider" && !item.piled && !item.drawn
         anchors.fill: parent
         source: item.kind === "trash" ? (dock.trashFull ? "user-trash-full" : "user-trash") : item.icon
         roundToIconSize: false          // magnified sizes are in between the standard ones
         opacity: item.dragged && host.removing ? 0.4 : 1
         transform: Translate { id: lift }
+    }
+
+    LaunchpadGlyph {
+        visible: item.kind === "launchpad"
+        anchors.fill: parent
+        transform: Translate { y: lift.y }
+    }
+
+    Loader {
+        id: widgetView
+        active: item.kind === "widget"
+        anchors.fill: parent
+        sourceComponent: item.widget === "clock" ? clockWidget
+            : item.widget === "battery" ? batteryWidget
+            : mediaWidget
+        transform: Translate { y: lift.y }
+    }
+    Component {
+        id: clockWidget
+        ClockWidget {
+            style: item.widgetStyle || "analog"
+        }
+    }
+    Component {
+        id: batteryWidget
+        BatteryWidget {}
+    }
+    Component {
+        id: mediaWidget
+        MediaWidget {}
     }
 
     Item {
@@ -207,7 +244,7 @@ Item {
         Kirigami.Theme.colorSet: Kirigami.Theme.Tooltip
         Kirigami.Theme.inherit: false
         readonly property real outward: host.vertical ? width : height
-        visible: host.cfg.labels && item.kind !== "divider" && !host.hidden
+        visible: host.cfg.labels && item.kind !== "divider" && !host.hidden && !item.previewing
             && ((item.hovered && !host.dragging) || (item.dragged && host.removing))
         width: labelText.implicitWidth + 22
         height: labelText.implicitHeight + 10
@@ -224,7 +261,11 @@ Item {
         Text {
             id: labelText
             anchors.centerIn: parent
-            text: item.dragged && host.removing ? qsTr("Remove") : item.kind === "trash" ? qsTr("Trash") : item.name
+            text: item.dragged && host.removing ? qsTr("Remove")
+                : item.kind === "trash" ? qsTr("Trash")
+                : item.kind === "widget" && widgetView.item ? widgetView.item.label
+                : item.name
+            textFormat: Text.PlainText
             color: Kirigami.Theme.textColor
             font.pointSize: Kirigami.Theme.defaultFont.pointSize
         }
@@ -240,6 +281,12 @@ Item {
                 dock.middleClick(item.index);
             } else if (item.kind === "stack") {
                 host.openStack(item);
+            } else if (item.kind === "launchpad") {
+                dock.toggleLaunchpadFrom(host.window);
+            } else if (item.kind === "widget" && item.widget === "clock") {
+                host.openCalendar(item);
+            } else if (item.kind === "widget" && item.widget === "battery") {
+                host.openMenu(item);
             } else {
                 dock.click(item.index);
             }

@@ -119,6 +119,7 @@ Rectangle {
                     Text {
                         Layout.fillWidth: true
                         text: row.modelData.text || ""
+                        textFormat: Text.PlainText          // window titles and song names are not markup
                         elide: Text.ElideRight
                         font.bold: row.modelData.type === "window" && row.modelData.check === true
                         font.pointSize: Kirigami.Theme.defaultFont.pointSize

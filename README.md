@@ -45,7 +45,7 @@ Built for Fedora 44 / Plasma 6.7.
 | Boot splash | Borealis (Plymouth) | Same logo and aurora spinner from power-on |
 | Desktop layout | built into each Global Theme | Floating top bar (launcher, global menu, centered clock, tray) + floating dock |
 | Konsole / Kate | Borealis Dark / Light | Terminal schemes + profiles, editor themes |
-| Dock | **Borealis Dock** | A standalone macOS-style dock: icons swell *above* the shelf, running dots, pinned ┆ open ┆ trash, drag to reorder or pull off to unpin, three hide modes, any screen edge (`--dock`; a panel-widget version remains as the fallback) |
+| Dock | **Borealis Dock** | A standalone macOS-style dock: icons swell *above* the shelf, running dots, pinned ┆ open ┆ trash, drag to reorder or pull off to unpin, three hide modes, any screen edge, live window previews, Launchpad, Stacks, clock/battery/now-playing widgets and shareable presets (`--dock`; a panel-widget version remains as the fallback) |
 | Quick Settings | **Borealis Quick Settings** | Wi-Fi, Bluetooth, Night Light, power profile, light/dark, animated wallpaper, brightness and volume in one popup |
 | Tweaks app | **Borealis Tweaks** | Switch variant, remix the palette onto any colour, toggle the animated aurora, undo |
 | Firefox | `borealis-userChrome.css` | Toolbars, tabs, address bar and menus in Borealis (`--firefox`) |
@@ -190,7 +190,8 @@ under the pointer staying put while its neighbours make room.
   with it, or on the trash to throw them away.
 - Right-click an icon for its windows, its own actions (a browser's "New
   Private Window"), New Window, Keep in Dock / Remove from Dock and Quit;
-  right-click the shelf to turn hiding or magnification on and off.
+  right-click the shelf to open Launchpad, pick a preset, or turn hiding or
+  magnification on and off.
 - Hide modes: always visible (windows keep clear of it), dodge windows, or
   auto-hide; push the pointer against the screen edge to bring it back.
   Bottom, left or right edge; primary screen, every screen, or the one with
@@ -209,6 +210,32 @@ under the pointer staying put while its neighbours make room.
   there are more; click a file to open it, drag it out to use it elsewhere.
   Right-click a stack to sort it, choose fan or grid, or show the plain folder
   icon; drop any folder on the dock to add it.
+- Window previews: rest the pointer on an open app and live pictures of its
+  windows appear beside the icon (KWin draws them, so they're live). Move up
+  into them and click one to switch to that window; middle-click or × closes it.
+- Launchpad: the grid icon at the start of the dock, or Meta+Space, lays every
+  app out on a frosted full-screen sheet, a page at a time. Type to search:
+  apps first, then System Settings pages, sums, unit conversions and files from
+  Plasma's runners. Arrows and Return launch, Escape leaves, and dragging an app
+  onto the dock pins it. To open it by tapping Meta on its own, give Meta to
+  "Borealis Dock: Launchpad" in System Settings › Keyboard › Shortcuts (KWin),
+  after taking it off whatever holds it now (by default Plasma's application
+  launcher).
+- Widgets sit before the Stacks: a clock (analog or digital; click it for a
+  calendar), the battery (click for power modes) and now playing (click to play
+  or pause, right-click to skip or switch players). The battery and now playing
+  appear only when there is one.
+- Presets: Borealis, macOS and Minimal from the shelf's menu or the Tweaks
+  page, plus your own. A preset changes the look and behaviour; your apps,
+  Stacks and widgets stay yours unless you save or pick a preset "with apps".
+  Export one to a file to share it, and import files others share.
+
+```bash
+borealis-dock --list-presets                 # * marks the one in use
+borealis-dock --preset macos                 # or a name you saved, or a shared .json file
+borealis-dock --export-preset ~/my-dock.json --with-apps
+borealis-dock --launchpad                    # bind this to any key or gesture you like
+```
 
 Everything is on the **Dock** page of Borealis Tweaks (right-click the shelf
 → Dock Settings… opens it), and applies as you change it. The page writes
@@ -216,7 +243,9 @@ Everything is on the **Dock** page of Borealis Tweaks (right-click the shelf
 `position`, `screen`, `iconSize`, `zoom`, `reach`, `spacing`, `padding`,
 `margin`, `radius`, `opacity`, `blur`, `border`, `hide`, `hideDelay`,
 `indicator`, `labels`, `bounce`, `divider`, `showTrash`, `animation`,
-`clickAction`, `badges`, `shortcuts`, `stacks`, `pinned`.
+`clickAction`, `badges`, `shortcuts`, `previews`, `previewDelay`, `launchpad`,
+`widgets`, `stacks`, `pinned`. Saved presets live beside it
+in `~/.config/borealis/dock-presets/`.
 
 How it fits together: KWin shares its window list only with plasmashell, so a
 tiny KWin script (the "Borealis Dock bridge", enabled by `--dock`) reports the

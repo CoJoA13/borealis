@@ -48,6 +48,7 @@ def build(out_root):
     # the Dock page edits the dock's settings with the dock's own code
     shutil.copy(os.path.join(HERE, "dock", "settings.py"), os.path.join(app, "docksettings.py"))
     shutil.copy(os.path.join(HERE, "dock", "stacks.py"), os.path.join(app, "dockstacks.py"))
+    shutil.copy(os.path.join(HERE, "dock", "presets.py"), os.path.join(app, "dockpresets.py"))
     with open(os.path.join(app, "ids.py"), "w") as f:
         f.write(ids_py())
     apps = os.path.join(out_root, "applications")

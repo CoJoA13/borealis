@@ -2,7 +2,8 @@
     Where the dock's menus open: a transparent layer-shell surface over the
     whole screen, shown only while a menu is up, so a click anywhere outside
     the menu closes it. (Qt's own popup windows don't work on layer-shell
-    surfaces: they turn into stray surfaces of their own.)
+    surfaces: they turn into stray surfaces of their own.) Stacks and the
+    clock's calendar open here too.
     SPDX-License-Identifier: GPL-3.0-or-later
 */
 import QtQuick
@@ -16,7 +17,7 @@ Window {
     property int row: -1
     property rect anchorRect: Qt.rect(0, 0, 0, 0)
     property string edge: "bottom"
-    property string mode: "menu"          // menu | stack
+    property string mode: "menu"          // menu | stack | calendar
     property var stackEntries: []
     property string stackTitle: ""
     property string stackPath: ""
@@ -56,6 +57,17 @@ Window {
     function clamp(v, lo, hi) {
         return Math.max(lo, Math.min(hi, v));
     }
+    // a popup of this size beside the dock item it belongs to
+    function placeX(w) {
+        return clamp(edge === "bottom" ? anchorRect.x + anchorRect.width / 2 - w / 2
+                     : edge === "left" ? anchorRect.x + anchorRect.width + 14
+                     : anchorRect.x - w - 14,
+                     8, Math.max(8, width - w - 8));
+    }
+    function placeY(h) {
+        return clamp(edge === "bottom" ? anchorRect.y - h - 14 : anchorRect.y + anchorRect.height / 2 - h / 2,
+                     8, Math.max(8, height - h - 8));
+    }
     function pushSurface() {
         if (!visible) {
             return;
@@ -64,6 +76,9 @@ Window {
             // while a file is dragged out, only the Stack takes input, so the
             // drop can land on whatever is underneath
             dock.updateSurface(overlay, dragging ? [stack.inputRect] : [], stack.blurRect, stack.blurRadius);
+        } else if (mode === "calendar") {
+            dock.updateSurface(overlay, [], Qt.rect(calendar.x, calendar.y, calendar.width, calendar.height),
+                               calendar.radius);
         } else {
             dock.updateSurface(overlay, [], Qt.rect(menu.x, menu.y, menu.width, menu.height), menu.radius);
         }
@@ -86,6 +101,11 @@ Window {
             overlay.stackView = view;
             overlay.show("stack", screen, row, x, y, w, h, edge);
             stack.forceActiveFocus();
+        }
+        function onCalendarRequested(screen, x, y, w, h, edge) {
+            calendar.reset();
+            overlay.show("calendar", screen, -1, x, y, w, h, edge);
+            calendar.forceActiveFocus();
         }
     }
 
@@ -120,17 +140,24 @@ Window {
         onBlurRectChanged: Qt.callLater(overlay.pushSurface)
     }
 
+    CalendarPopup {
+        id: calendar
+        visible: overlay.mode === "calendar"
+        x: overlay.placeX(width)
+        y: overlay.placeY(height)
+        onDismissed: overlay.close()
+        onXChanged: Qt.callLater(overlay.pushSurface)
+        onYChanged: Qt.callLater(overlay.pushSurface)
+        onWidthChanged: Qt.callLater(overlay.pushSurface)
+        onHeightChanged: Qt.callLater(overlay.pushSurface)
+    }
+
     DockMenu {
         id: menu
         visible: overlay.mode === "menu"
         entries: overlay.entries
-        x: overlay.clamp(overlay.edge === "bottom" ? overlay.anchorRect.x + overlay.anchorRect.width / 2 - width / 2
-                         : overlay.edge === "left" ? overlay.anchorRect.x + overlay.anchorRect.width + 14
-                         : overlay.anchorRect.x - width - 14,
-                         8, Math.max(8, overlay.width - width - 8))
-        y: overlay.clamp(overlay.edge === "bottom" ? overlay.anchorRect.y - height - 14
-                         : overlay.anchorRect.y + overlay.anchorRect.height / 2 - height / 2,
-                         8, Math.max(8, overlay.height - height - 8))
+        x: overlay.placeX(width)
+        y: overlay.placeY(height)
         onTriggered: key => {
             const row = overlay.row;
             overlay.close();

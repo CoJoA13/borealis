@@ -12,22 +12,25 @@ from stacks import folder_icon, resolve as resolve_stack
 
 ROLES = ("kind", "key", "appId", "name", "icon", "pinned", "windows", "windowCount",
          "active", "attention", "launching", "hasEntry", "badge", "progress",
-         "stackPath", "stackCount", "preview", "display")
+         "stackPath", "stackCount", "preview", "display", "widget", "widgetStyle")
 DEFAULTS = {"kind": "", "key": "", "appId": "", "name": "", "icon": "", "pinned": False,
             "windows": [], "windowCount": 0, "active": False, "attention": False,
             "launching": False, "hasEntry": False, "badge": 0, "progress": -1.0,
-            "stackPath": "", "stackCount": 0, "preview": [], "display": ""}
+            "stackPath": "", "stackCount": 0, "preview": [], "display": "", "widget": "", "widgetStyle": ""}
 LAUNCH_TIMEOUT = 12.0
+WIDGET_NAMES = {"clock": "Clock", "battery": "Battery", "media": "Now Playing"}
 
 
 class DockModel(QAbstractListModel):
     offsetsChanged = Signal()
     countChanged = Signal()
 
-    def __init__(self, settings, apps, bridge, badges=None, stacks=None, parent=None):
+    def __init__(self, settings, apps, bridge, badges=None, stacks=None, battery=None, media=None, parent=None):
         super().__init__(parent)
         self.settings, self.apps, self.bridge = settings, apps, bridge
         self.badges, self.stacks = badges, stacks
+        self.battery, self.media = battery, media
+        self._widget_state = None
         self.items = []
         self.pins = []                 # [(spec as saved, resolved entry id)]
         self._preview = None           # pinned order while an icon is being dragged
@@ -45,7 +48,24 @@ class DockModel(QAbstractListModel):
             badges.changed.connect(self.rebuild)
         if stacks is not None:
             stacks.changed.connect(self.rebuild)
+        for source in (battery, media):
+            if source is not None:
+                source.changed.connect(self._widgets_changed)
         self.rebuild()
+
+    def _widget_availability(self):
+        """Widgets with nothing to show stay out: no battery, nothing playing."""
+        return (self.battery is not None and bool(self.battery.present),
+                self.media is not None and bool(self.media.available))
+
+    def _widgets_changed(self):
+        if self._widget_availability() != self._widget_state:
+            self.rebuild()
+
+    @property
+    def pin_offset(self):
+        """Rows before the first pinned app (the Launchpad icon)."""
+        return 1 if self.items and self.items[0]["kind"] == "launchpad" else 0
 
     # --- Qt model ---------------------------------------------------------
     def roleNames(self):
@@ -153,7 +173,10 @@ class DockModel(QAbstractListModel):
             entry = self.apps.match(w.get("app", ""), w.get("cls", ""), w.get("name", ""))
             key = entry.id if entry else "window:" + (w.get("cls") or w.get("app") or w["id"])
             groups.setdefault(key, []).append(w)
-        items = [self._app(entry_id, True, groups.pop(entry_id, [])) for entry_id in order]
+        items = []
+        if self.settings.get("launchpad"):
+            items.append({"kind": "launchpad", "key": "launchpad", "name": "Launchpad", "icon": "view-app-grid"})
+        items += [self._app(entry_id, True, groups.pop(entry_id, [])) for entry_id in order]
         for key in groups:
             self._first_seen.setdefault(key, next(self._counter))
         for key in [k for k in self._first_seen if k not in groups]:
@@ -165,6 +188,14 @@ class DockModel(QAbstractListModel):
                 items.append({"kind": "divider", "key": "divider:open"})
             items += opened
         end = []
+        self._widget_state = self._widget_availability()
+        battery_ok, media_ok = self._widget_state
+        for widget in self.settings.get("widgets"):
+            kind = widget["type"]
+            if (kind == "battery" and not battery_ok) or (kind == "media" and not media_ok):
+                continue
+            end.append({"kind": "widget", "key": "widget:" + kind, "widget": kind,
+                        "widgetStyle": widget.get("style", ""), "name": WIDGET_NAMES.get(kind, kind)})
         stacks = self.settings.get("stacks") if self.stacks is not None else []
         if self.stacks is not None:
             self.stacks.watch([st["path"] for st in stacks])

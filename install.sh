@@ -182,9 +182,9 @@ kwin_bridge() {     # on | off
     # reloading the installed file would run the old code again. This version
     # loads from a path of its own (gone at logout; the next login reads the
     # installed package as usual).
-    copy="${XDG_RUNTIME_DIR:-/tmp}/borealis-dockbridge/$(cat "$DEST/kwin/scripts/$DOCK_BRIDGE/contents/ui/"*.qml | sha1sum | cut -c1-12)"
+    copy="${XDG_RUNTIME_DIR:-/tmp}/borealis-dockbridge/$(cat "$DEST/kwin/scripts/$DOCK_BRIDGE/contents/ui/"* | sha1sum | cut -c1-12)"
     mkdir -p "$copy"
-    cp "$DEST/kwin/scripts/$DOCK_BRIDGE/contents/ui/"*.qml "$copy/"
+    cp "$DEST/kwin/scripts/$DOCK_BRIDGE/contents/ui/"* "$copy/"
     qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.loadDeclarativeScript "$copy/main.qml" "$DOCK_BRIDGE" >/dev/null 2>&1 \
         && qdbus-qt6 org.kde.KWin /Scripting org.kde.kwin.Scripting.start >/dev/null 2>&1 || true
 }

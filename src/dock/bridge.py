@@ -108,6 +108,34 @@ class DockService(QObject):
         self.controller.activateSlot(number)
 
     @Slot()
+    def ToggleLaunchpad(self):
+        """For `borealis-dock --launchpad`, and anything else that wants Launchpad."""
+        self.controller.toggleLaunchpad()
+
+    @Slot(str)
+    def ToggleLaunchpadOn(self, screen):
+        self.controller.toggle_launchpad_on(screen)
+
+    @Slot(bool, bool)
+    def PreviewState(self, visible, hovered):
+        self.controller.preview_state(visible, hovered)
+
+    @Slot(result=str)
+    def State(self):
+        """For tests: Launchpad, previews and widgets as the dock sees them."""
+        c = self.controller
+        battery, media, grid = c.battery, c.media, c.launchpadApps
+        return json.dumps({
+            "launchpadOpen": c.launchpadOpen, "launchpadQuery": grid.query if grid else "",
+            "launchpadApps": [it["appId"] for it in grid.items[:12]] if grid else [],
+            "previewVisible": c.previewVisible, "previewHovered": c.previewHovered, "previewRow": c.previewRow,
+            "battery": {"present": battery.present, "percent": battery.percent, "status": battery.status,
+                        "profile": battery.profile, "profiles": battery.profiles} if battery else None,
+            "media": {"available": media.available, "playing": media.playing, "title": media.title,
+                      "artist": media.artist, "identity": media.identity} if media else None,
+        })
+
+    @Slot()
     def Reload(self):
         self.controller.settings.load()
 
@@ -119,7 +147,8 @@ class DockService(QObject):
     def Layout(self):
         """The resting layout, for tests: where each row sits along the dock."""
         model, settings = self.controller.model, self.controller.settings
-        rows = [{"kind": it["kind"], "appId": it.get("appId", ""), "windows": it.get("windowCount", 0),
+        rows = [{"kind": it["kind"], "appId": it.get("appId", "") or it.get("widget", ""),
+                 "windows": it.get("windowCount", 0),
                  "active": it.get("active", False), "launching": it.get("launching", False),
                  "badge": it.get("badge", 0), "progress": it.get("progress", -1.0)}
                 for it in model.items]

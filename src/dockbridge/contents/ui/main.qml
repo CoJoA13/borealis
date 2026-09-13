@@ -12,17 +12,83 @@ import org.kde.kwin as KWin
 Item {
     id: bridge
 
-    readonly property string version: "1"
+    readonly property string version: "2"
     readonly property string service: "org.borealis.Dock"
     readonly property string objectPath: "/Dock"
     readonly property string iface: "org.borealis.Dock1"
     readonly property string shortcutName: "Borealis Dock: sync"
     readonly property string slotShortcut: "Borealis Dock: activate app "
+    readonly property string launchpadShortcut: "Borealis Dock: Launchpad"
     property bool shortcutsEnabled: false   // Meta+1…9, when the dock asks for them
     property bool debug: false          // the dock turns this on when it runs with tracing
 
     function listed(w) {
-        return w.normalWindow === true && w.skipTaskbar !== true;
+        // KWin's own windows (these previews, on-screen displays) have no process
+        return w.normalWindow === true && w.skipTaskbar !== true && w.popupWindow !== true && w.pid !== -1;
+    }
+
+    // ---- previews ---------------------------------------------------------
+    function outputRect(name) {
+        const screens = KWin.Workspace.screens;
+        for (let i = 0; i < screens.length; i++) {
+            const g = screens[i].geometry;
+            if (screens[i].name === name && g && g.width > 0) {
+                return Qt.rect(g.x, g.y, g.width, g.height);
+            }
+        }
+        return Qt.rect(0, 0, 0, 0);
+    }
+
+    function showPreview(c) {
+        const p = previewLoader.item;
+        if (!p) {
+            return;
+        }
+        const entries = [];
+        const ids = c.ids || [];
+        for (let i = 0; i < ids.length; i++) {
+            const w = bridge.find(ids[i]);
+            if (w) {
+                entries.push({ window: w, id: w.internalId });
+            }
+        }
+        if (entries.length === 0) {
+            bridge.hidePreview();
+            return;
+        }
+        closeTimer.stop();
+        p.edge = c.edge || "bottom";
+        p.anchorRect = Qt.rect(c.x, c.y, c.w, c.h);
+        p.area = bridge.outputRect(c.output || "");
+        p.entries = entries;
+        p.visible = true;
+        p.place();
+        Qt.callLater(() => { if (previewLoader.item) previewLoader.item.place(); });
+        bridge.reportPreview();
+    }
+
+    function hidePreview() {
+        closeTimer.stop();
+        if (previewLoader.item && previewLoader.item.visible) {
+            previewLoader.item.visible = false;
+            previewLoader.item.entries = [];
+        }
+        bridge.reportPreview();
+    }
+
+    property bool reportedVisible: false
+    property bool reportedHovered: false
+    function reportPreview() {
+        const p = previewLoader.item;
+        const shown = !!p && p.visible;
+        const hovered = shown && p.hovered;
+        if (shown === reportedVisible && hovered === reportedHovered) {
+            return;
+        }
+        reportedVisible = shown;
+        reportedHovered = hovered;
+        previewState.arguments = [shown, hovered];
+        previewState.call();
     }
 
     function describe(w, index, current) {
@@ -96,6 +162,20 @@ Item {
                                + " managed=" + x.managed + " deleted=" + x.deleted + " popup=" + x.popupWindow
                                + " geometry=" + x.frameGeometry);
                 }
+                continue;
+            }
+            if (c.op === "preview") {
+                bridge.showPreview(c);
+                continue;
+            }
+            if (c.op === "previewLeave") {
+                // the pointer may be on its way to the previews: wait a moment
+                // (and a preview asked for in the same breath closes too, unless it's reached)
+                closeTimer.restart();
+                continue;
+            }
+            if (c.op === "previewHide") {
+                bridge.hidePreview();
                 continue;
             }
             const w = c.id ? find(c.id) : null;
@@ -246,6 +326,77 @@ Item {
         method: "ActivateSlot"
     }
 
+    // Launchpad, from anywhere
+    KWin.ShortcutHandler {
+        name: bridge.launchpadShortcut
+        text: bridge.launchpadShortcut
+        sequence: "Meta+Space"
+        onActivated: {
+            // on the screen being worked on
+            launchpadCall.arguments = [KWin.Workspace.activeScreen ? String(KWin.Workspace.activeScreen.name) : ""];
+            launchpadCall.call();
+        }
+    }
+
+    KWin.DBusCall {
+        id: launchpadCall
+        service: bridge.service
+        path: bridge.objectPath
+        dbusInterface: bridge.iface
+        method: "ToggleLaunchpadOn"
+    }
+
+    KWin.DBusCall {
+        id: previewState
+        service: bridge.service
+        path: bridge.objectPath
+        dbusInterface: bridge.iface
+        method: "PreviewState"
+    }
+
+    Loader {
+        id: previewLoader
+        source: "Previews.qml"
+        onStatusChanged: if (status === Loader.Error) {
+            bridge.say("window previews couldn't load");
+        }
+    }
+
+    Connections {
+        target: previewLoader.item
+        function onHoveredChanged() {
+            if (previewLoader.item.hovered) {
+                closeTimer.stop();
+            } else if (previewLoader.item.visible) {
+                closeTimer.restart();
+            }
+            bridge.reportPreview();
+        }
+        function onVisibleChanged() {
+            bridge.reportPreview();
+        }
+        function onActivateRequested(w) {
+            if (w) {
+                w.minimized = false;
+                KWin.Workspace.activeWindow = w;
+            }
+            bridge.hidePreview();
+        }
+        function onCloseRequested(w) {
+            if (w) {
+                w.closeWindow();
+            }
+        }
+    }
+
+    Timer {
+        id: closeTimer
+        interval: 300
+        onTriggered: if (!(previewLoader.item && previewLoader.item.hovered)) {
+            bridge.hidePreview();
+        }
+    }
+
     KWin.ShortcutHandler {
         name: bridge.shortcutName
         text: bridge.shortcutName
@@ -263,6 +414,15 @@ Item {
             throttle.poke();
         }
         function onWindowRemoved(w) {
+            const p = previewLoader.item;
+            if (p && p.visible) {
+                const left = p.entries.filter(e => String(e.id) !== String(w.internalId));
+                if (left.length === 0) {
+                    bridge.hidePreview();
+                } else if (left.length !== p.entries.length) {
+                    p.entries = left;
+                }
+            }
             throttle.poke();
         }
         function onWindowActivated(w) {
