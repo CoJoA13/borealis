@@ -95,6 +95,25 @@ def main():
     if not engine.rootObjects():
         sys.exit("bar: the interface didn't load (is layer-shell-qt installed?)")
 
+    # Plasma's notification library claims the notification service once, as
+    # the bar starts. If another program still had it then (plasmashell, from
+    # before the switch), start over in place the moment it lets go: the same
+    # process under the same interpreter copy, so nothing else notices
+    from PySide6.QtDBus import QDBusServiceWatcher
+    notifications = "org.freedesktop.Notifications"
+    owner = bus.interface().serviceOwner(notifications)
+    owner = owner.value() if hasattr(owner, "value") else owner
+    service.serving = owner == bus.baseService()
+    if not service.serving:
+        print(f"bar: {notifications} belongs to someone else; waiting for it to be free", file=sys.stderr, flush=True)
+
+    def start_over(*_):
+        if not service.serving:
+            print("bar: the notification service is free; starting over to take it", file=sys.stderr, flush=True)
+            os.execv(sys.executable, [sys.executable, os.path.realpath(__file__)] + sys.argv[1:])
+    released = QDBusServiceWatcher(notifications, bus, QDBusServiceWatcher.WatchModeFlag.WatchForUnregistration, app)
+    released.serviceUnregistered.connect(start_over)
+
     # let Python see SIGTERM from systemd between Qt events
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: app.quit())

@@ -9,10 +9,16 @@ from PySide6.QtCore import Property, QAbstractItemModel, QObject, QRect, QTimer,
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 import shiboken6
 
+# the filters only mean something once the model knows which activity and
+# virtual desktop are current (Plasma's task manager binds the same two)
 TASKS_QML = b"""import QtQuick
 import org.kde.taskmanager as TaskManager
 TaskManager.TasksModel {
+    property var activities: TaskManager.ActivityInfo {}
+    property var desktops: TaskManager.VirtualDesktopInfo {}
     groupMode: TaskManager.TasksModel.GroupDisabled
+    activity: activities.currentActivity
+    virtualDesktop: desktops.currentDesktop
     filterByVirtualDesktop: true
     filterByActivity: true
     filterByScreen: false

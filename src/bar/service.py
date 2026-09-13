@@ -10,6 +10,7 @@ class BarService(QObject):
         super().__init__(parent)
         self.bar = controller
         self.app = app
+        self.serving = False            # whether the bar is the notification server
         self._last_menu = ("", [])
         controller.menuRequested.connect(lambda entries, source, *_: setattr(self, "_last_menu", (source, entries)))
 
@@ -17,7 +18,9 @@ class BarService(QObject):
     def State(self):
         bar = self.bar
         return json.dumps({
+            "notificationServer": self.serving,
             "windowTracking": bar.windows.available,
+            "windowCount": bar.windows.count,
             "active": bar.windows.active,
             "covered": bar.windows.covered,
             "menuTitles": bar.appmenu.titles,
