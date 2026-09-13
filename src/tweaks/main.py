@@ -2,7 +2,7 @@
 """Borealis Tweaks: a small desktop app for the Borealis theme.
 
     borealis-tweaks           open the window
-    borealis-tweaks --page dock   open it on the Dock page (or theme, system)
+    borealis-tweaks --page dock   open it on the Dock page (or theme, bar, controls, system)
     BOREALIS_PROJECT=~/src/Borealis borealis-tweaks     use another checkout
 """
 import os
@@ -23,7 +23,7 @@ from dockpage import DockBackend  # noqa: E402
 from barpage import BarBackend  # noqa: E402
 
 # the pages in ui/main.qml's sidebar, by name
-PAGES = ("theme", "bar", "dock", "system")
+PAGES = ("theme", "bar", "controls", "dock", "system")
 
 
 def main():

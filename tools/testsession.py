@@ -514,6 +514,11 @@ if [ "$BAR" = 1 ]; then
     shot bar-banner
     bs Open clock >> "$SANDBOX/bar-steps.log"; sleep 1.5; shot bar-clock; bs Close; sleep 0.8
     bs Open controls >> "$SANDBOX/bar-steps.log"; sleep 2; shot bar-controls; bs Close; sleep 0.8
+    # the Control Center's pages and edit mode, only looked at: their switches
+    # would reach this computer's real network, Bluetooth and sound
+    for page in wifi bluetooth sound power dnd hotspot screenshot edit; do
+        bs Open "controls:$page" >> "$SANDBOX/bar-steps.log"; sleep 1.6; shot "bar-cc-$page"; bs Close; sleep 0.6
+    done
     bs Open tray:0 >> "$SANDBOX/bar-steps.log"; sleep 1.5; shot bar-tray
     bs Trigger Hello >> "$SANDBOX/bar-steps.log"; sleep 1
     bs Open drives >> "$SANDBOX/bar-steps.log"; sleep 1.5; shot bar-drives; bs Close; sleep 0.8
@@ -1138,7 +1143,7 @@ def main():
         "SCREEN_W": w, "SCREEN_H": h,
     }
     # the standalone dock's and bar's runs walk through every feature, and take a while
-    cmd = ["timeout", str(120 + 210 * args.standalone_dock + 120 * args.bar), "dbus-run-session", "--",
+    cmd = ["timeout", str(120 + 210 * args.standalone_dock + 150 * args.bar), "dbus-run-session", "--",
            "kwin_wayland", "--virtual", "--no-lockscreen",
            "--width", w, "--height", h,
            "--socket", f"wayland-borealis-{os.getpid()}"]

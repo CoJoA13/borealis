@@ -161,6 +161,8 @@ Everything is generated from Python (PIL, pycairo, librsvg via GObject; Qt's
                             #   aurorae icons sounds live plymouth gtk terminal lnf
 tools/check.py              # QML, SVG, JSON, package, Plymouth and WCAG checks
 tools/contrast.py           # just the WCAG audit, pair by pair
+tools/tweakscheck.py        # every Borealis Tweaks page, narrow and wide, off-screen
+tools/barcheck.py           # the bar's Control Center, every page and edit mode, with stand-in backends
 tools/testsession.py dark   # screenshots from an isolated, off-screen Plasma session
 tools/package.py            # KDE Store archives → dist/ (see STORE.md)
 ```
@@ -194,17 +196,28 @@ maximized.
 - Apps' tray icons: click, right-click for their menu, middle-click, scroll.
 - A drive icon while a USB stick or memory card is plugged in: open it, or
   remove it safely.
-- The Control Center: battery and session buttons, brightness and volume
-  sliders, what's playing, and toggles for Wi-Fi, Bluetooth, Night Light, the
-  power profile, dark style, Do Not Disturb and the animated aurora.
+- The Control Center: battery and session buttons, sliders (screen
+  brightness, volume, microphone, keyboard light), what's playing, and round
+  toggles for Wi-Fi, Bluetooth, Night Light, the power mode, dark style, Do Not
+  Disturb, the animated aurora and Stay Awake, with Airplane Mode, Hotspot,
+  Microphone, Keyboard Light, Screenshot and Record Screen a click away.
+  - A toggle's arrow opens its page: join a Wi-Fi network (typing a new one's
+    password right there), connect or disconnect a Bluetooth device, pick where
+    sound plays and set each app's volume, choose a power mode, silence
+    notifications for an hour or until morning, share the connection as a
+    hotspot, or capture a region, a window or the screen.
+  - The pencil turns on edit mode: drag toggles into the order you like, take
+    one out with −, add another from the list below.
 
-Everything is on the **Bar** page of Borealis Tweaks and applies as you change
-it: the look, which items sit left, middle or right, the clock, where banners
-appear, the Control Center's toggles and which tray icons show. The page writes
+Everything is on the **Bar** and **Control Center** pages of Borealis Tweaks
+and applies as you change it: the look, which items sit left, middle or right,
+the clock, where banners appear, which tray icons show, and the Control
+Center's toggles, sliders and the icons on its button. The pages write
 `~/.config/borealis/bar.json`, which the bar watches: `screen`, `height`,
 `floating`, `gap`, `radius`, `opacity`, `blur`, `border`, `flush`, `left`,
 `center`, `right`, `clockDate`, `clockWeekday`, `clockSeconds`, `clockHours`,
-`banners`, `bannerPosition`, `pills`, `media`, `trayHidden`.
+`banners`, `bannerPosition`, `pills`, `sliders`, `media`, `glyphs`,
+`batteryPercent`, `trayHidden`.
 
 How it fits together: KWin shares its list of windows (which is where the menu
 of the app in front comes from) only with programs it trusts by their

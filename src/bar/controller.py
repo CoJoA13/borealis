@@ -5,9 +5,11 @@ import re
 import shlex
 import signal
 
-from PySide6.QtCore import Property, QObject, QProcess, QRectF, QTimer, Signal, Slot
+from PySide6.QtCore import Property, QObject, QProcess, QRectF, QStandardPaths, QTimer, Signal, Slot
+from PySide6.QtDBus import QDBus, QDBusConnection, QDBusMessage
 
 import ids
+from settings import PILLS
 from surfaces import Surfaces
 
 # one read of everything the Control Center's own toggles show
@@ -17,6 +19,20 @@ PROBE = "; ".join([
     'printf "wallpaper=%s\\n" "$(qdbus-qt6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript '
     '\'print(desktops().map(function (d) { return d.wallpaperPlugin; }).join(","));\' 2>/dev/null)"',
 ])
+
+# screenshots and recordings: Spectacle's global shortcut for each, and its
+# command line for when there's no shortcut service to ask
+SPECTACLE = "/component/org_kde_spectacle_desktop"
+CAPTURES = {
+    "region": ("RectangularRegionScreenShot", ["--region"]),
+    "window": ("ActiveWindowScreenShot", ["--activewindow"]),
+    "screen": ("CurrentMonitorScreenShot", ["--current"]),
+    "all": ("FullScreenScreenShot", ["--fullscreen"]),
+    "record-region": ("RecordRegion", ["--record", "region"]),
+    "record-window": ("RecordWindow", ["--record", "window"]),
+    "record-screen": ("RecordScreen", ["--record", "screen"]),
+    "open": ("_launch", []),
+}
 
 
 def desktop_file(entry_id):
@@ -44,6 +60,8 @@ class Controller(QObject):
     confirmRequested = Signal(str, str, str, str)
     sessionRequested = Signal(str)
     closeRequested = Signal()
+    # a Control Center page to show ("" for its front, "edit" for edit mode)
+    controlsPageRequested = Signal(str)
 
     def __init__(self, app, settings, windows, appmenu, tray, drives, battery, media, parent=None):
         super().__init__(parent)
@@ -58,6 +76,7 @@ class Controller(QObject):
         self._buttons = {}                  # name -> (screen name, QRectF), reported by the QML
         self._tray_anchor = None
         self._toggles = {"night": False, "dark": True, "aurora": False, "known": False}
+        self._controls = {"page": "", "editing": False}
         self._screen_key = settings.get("screen")
         settings.changed.connect(self._settings_changed)
         for sig in (app.screenAdded, app.screenRemoved, app.primaryScreenChanged):
@@ -265,6 +284,49 @@ class Controller(QObject):
     @Slot(str)
     def openKcm(self, module):
         QProcess.startDetached("systemsettings", [module])
+
+    @Slot(str)
+    def openTweaks(self, page):
+        self.launchWith(ids.TWEAKS_ID, f"--page {page}" if page else "")
+
+    # --- the Control Center -------------------------------------------------
+    allPills = Property("QVariantList", lambda self: list(PILLS), constant=True)
+
+    @Property(bool, constant=True)
+    def canCapture(self):
+        return bool(QStandardPaths.findExecutable("spectacle"))
+
+    @Slot(str, bool)
+    def reportControls(self, page, editing):
+        """Which page the Control Center shows, and whether it's in edit mode."""
+        self._controls = {"page": page, "editing": bool(editing)}
+
+    def controls_state(self):
+        return dict(self._controls)
+
+    def show_controls_page(self, page):
+        self.controlsPageRequested.emit(page)
+
+    @Slot(str)
+    def capture(self, kind):
+        """A screenshot or screen recording through Spectacle, once the popup is off the screen."""
+        shortcut, args = CAPTURES.get(kind, CAPTURES["region"])
+        self.closeRequested.emit()
+        QTimer.singleShot(350, lambda: self._capture(shortcut, args))
+
+    def _capture(self, shortcut, args):
+        bus = QDBusConnection.sessionBus()
+        names = QDBusMessage.createMethodCall("org.kde.kglobalaccel", SPECTACLE, "org.kde.kglobalaccel.Component",
+                                              "shortcutNames")
+        reply = bus.call(names, QDBus.CallMode.Block, 1500)
+        known = reply.arguments()[0] if reply.type() == QDBusMessage.MessageType.ReplyMessage and reply.arguments() else []
+        if shortcut in known:
+            call = QDBusMessage.createMethodCall("org.kde.kglobalaccel", SPECTACLE, "org.kde.kglobalaccel.Component",
+                                                 "invokeShortcut")
+            call.setArguments([shortcut])
+            bus.send(call)
+        else:
+            QProcess.startDetached("spectacle", args)
 
     # --- the Control Center's own toggles -----------------------------------
     @Slot()

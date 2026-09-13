@@ -1,7 +1,8 @@
 /*
     What the bar shows about the machine, from Plasma's own modules: the
-    network, Bluetooth, sound and screen brightness. Each loads on its own, so
-    a missing module leaves just its glyph and toggle out.
+    network, Bluetooth, sound, screen and keyboard brightness, and power. Each
+    loads on its own, so a missing module leaves just its glyph, slider and
+    toggles out.
     SPDX-License-Identifier: GPL-3.0-or-later
 */
 import QtQuick
@@ -22,4 +23,6 @@ QtObject {
     readonly property var bt: load("status/Bluetooth.qml")
     readonly property var sound: load("status/Sound.qml")
     readonly property var brightness: load("status/Brightness.qml")
+    readonly property var keyboard: load("status/Keyboard.qml")
+    readonly property var power: load("status/Power.qml")
 }

@@ -83,6 +83,14 @@ class BarBackend(QObject):
     def pills(self):
         return list(barsettings.PILLS)
 
+    @Property("QVariantList", constant=True)
+    def sliders(self):
+        return list(barsettings.SLIDERS)
+
+    @Property("QVariantList", constant=True)
+    def glyphs(self):
+        return list(barsettings.GLYPHS)
+
     def _read_tray(self):
         """The tray icons the running bar shows, so they can be hidden from here."""
         tray = []
@@ -162,6 +170,20 @@ class BarBackend(QObject):
             pills.insert(j, pills.pop(i))
             self.set("pills", pills)
 
+    def _choose(self, key, name, on):
+        chosen = [n for n in self.values.get(key, []) if n != name]
+        if on:
+            chosen.append(name)
+        self.set(key, chosen)             # the settings file puts them in their order
+
+    @Slot(str, bool)
+    def setSlider(self, name, on):
+        self._choose("sliders", name, on)
+
+    @Slot(str, bool)
+    def setGlyph(self, name, on):
+        self._choose("glyphs", name, on)
+
     @Slot(str, bool)
     def setTrayShown(self, item_id, shown):
         hidden = [h for h in self.values.get("trayHidden", []) if h != item_id]
@@ -172,7 +194,21 @@ class BarBackend(QObject):
     @Slot()
     def resetLook(self):
         self._write()
-        self.settings.update({k: v for k, v in barsettings.DEFAULTS.items() if k != "trayHidden"})
+        keep = ("trayHidden",) + barsettings.CONTROLS
+        self.settings.update({k: v for k, v in barsettings.DEFAULTS.items() if k not in keep})
+
+    @Slot()
+    def resetControls(self):
+        self._write()
+        self.settings.update({k: barsettings.DEFAULTS[k] for k in barsettings.CONTROLS})
+
+    @Slot(str)
+    def openControlCenter(self, page):
+        """The running bar's Control Center, on one of its pages or in edit mode."""
+        if self.running:
+            self._write()
+            QDBusInterface(BUS, "/Bar", BUS + "1", QDBusConnection.sessionBus()).call(
+                "Open", f"controls:{page}" if page else "controls")
 
     # ---------------------------------------------------------- the bar itself --
     @Slot()

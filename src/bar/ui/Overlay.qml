@@ -181,6 +181,7 @@ Window {
         notices: overlay.notices
         x: overlay.placeX(width, "right")
         y: overlay.placeY()
+        maxHeight: overlay.height - y - 12
         onDismissed: overlay.close()
         onXChanged: Qt.callLater(overlay.pushSurface)
         onHeightChanged: Qt.callLater(overlay.pushSurface)

@@ -18,9 +18,12 @@ Rectangle {
     implicitWidth: label.implicitWidth + 28
     implicitHeight: 30
     radius: 8
+    opacity: enabled ? 1 : 0.45
     color: primary || destructive
         ? Qt.rgba(tint.r, tint.g, tint.b, hover.hovered ? 1.0 : 0.85)
         : Qt.rgba(fg.r, fg.g, fg.b, hover.hovered ? 0.16 : 0.08)
+    Accessible.name: text
+    Accessible.role: Accessible.Button
 
     Text {
         id: label
@@ -34,6 +37,7 @@ Rectangle {
         cursorShape: Qt.PointingHandCursor
     }
     TapHandler {
+        gesturePolicy: TapHandler.ReleaseWithinBounds
         onTapped: button.clicked()
     }
 }

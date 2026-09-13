@@ -8,8 +8,13 @@ import settingsfile
 SCHEMA = 1
 # what can sit in the bar, by name
 ITEMS = ("menu", "app", "appmenu", "clock", "tray", "drives", "controls")
-# the Control Center's round toggles
-PILLS = ("wifi", "bluetooth", "night", "power", "dark", "dnd", "aurora")
+# the Control Center's round toggles, in the order its edit mode offers them
+PILLS = ("wifi", "bluetooth", "night", "power", "dark", "dnd", "aurora", "awake",
+         "airplane", "hotspot", "mic", "keyboard", "screenshot", "record")
+# the Control Center's sliders, shown in this order
+SLIDERS = ("brightness", "volume", "microphone", "keyboard")
+# what the Control Center's button in the bar shows, in this order
+GLYPHS = ("network", "bluetooth", "sound", "battery")
 DEFAULTS = {
     "schema": SCHEMA,
     "screen": "all",             # all | primary
@@ -30,10 +35,15 @@ DEFAULTS = {
     "clockHours": "auto",        # auto | 12 | 24
     "banners": True,             # notifications pop up under the bar
     "bannerPosition": "right",   # right | center
-    "pills": list(PILLS),
+    "pills": ["wifi", "bluetooth", "night", "power", "dark", "dnd", "aurora", "awake"],
+    "sliders": ["brightness", "volume"],
     "media": True,
+    "glyphs": list(GLYPHS),
+    "batteryPercent": True,      # the percentage beside the battery glyph
     "trayHidden": [],            # tray items (by their id) left out of the bar
 }
+# the Control Center's share of the file, which Tweaks resets on its own
+CONTROLS = ("pills", "sliders", "media", "glyphs", "batteryPercent")
 RANGES = {"height": (22, 48), "gap": (0, 24), "radius": (0, 24), "opacity": (0.0, 1.0)}
 CHOICES = {"screen": ("all", "primary"), "clockHours": ("auto", "12", "24"),
            "bannerPosition": ("right", "center")}
@@ -77,8 +87,12 @@ def sanitize(data):
                 seen.add(item)
                 clean.append(item)
         out[zone] = clean
+    # toggles keep the order given; sliders and glyphs have their own
     pills = out["pills"] if isinstance(out["pills"], list) else DEFAULTS["pills"]
     out["pills"] = list(dict.fromkeys(p for p in pills if p in PILLS))
+    for key, known in (("sliders", SLIDERS), ("glyphs", GLYPHS)):
+        chosen = out[key] if isinstance(out[key], list) else DEFAULTS[key]
+        out[key] = [name for name in known if name in chosen]
     hidden = out["trayHidden"] if isinstance(out["trayHidden"], list) else []
     out["trayHidden"] = [h for h in hidden if isinstance(h, str) and h]
     out["schema"] = SCHEMA

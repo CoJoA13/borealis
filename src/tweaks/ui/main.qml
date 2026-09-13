@@ -27,6 +27,7 @@ Kirigami.ApplicationWindow {
     readonly property var pageComponents: ({
         theme: themePage,
         bar: barPage,
+        controls: controlsPage,
         dock: dockPage,
         system: systemPage
     })
@@ -73,6 +74,13 @@ Kirigami.ApplicationWindow {
                 onTriggered: root.showPage("bar")
             },
             Kirigami.Action {
+                text: qsTr("Control Center")
+                icon.name: "adjustlevels"
+                checkable: true
+                checked: root.page === "controls"
+                onTriggered: root.showPage("controls")
+            },
+            Kirigami.Action {
                 text: qsTr("Dock")
                 icon.name: "preferences-desktop-display"
                 checkable: true
@@ -107,6 +115,11 @@ Kirigami.ApplicationWindow {
     Component {
         id: barPage
         BarPage {}
+    }
+
+    Component {
+        id: controlsPage
+        ControlsPage {}
     }
 
     Component {

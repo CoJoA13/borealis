@@ -1,7 +1,7 @@
 /*
     Borealis Tweaks, the Bar page: the top bar's look, what sits where, the
-    clock, notifications, the Control Center's toggles and the tray.
-    Changes reach the running bar as you make them.
+    clock, notifications and the tray (the Control Center has a page of its
+    own). Changes reach the running bar as you make them.
     SPDX-License-Identifier: GPL-3.0-or-later
 */
 import QtQuick
@@ -17,10 +17,6 @@ Kirigami.ScrollablePage {
     readonly property var itemNames: ({
         menu: qsTr("Borealis menu"), app: qsTr("App name"), appmenu: qsTr("App menus"), clock: qsTr("Clock"),
         tray: qsTr("Tray icons"), drives: qsTr("Drives"), controls: qsTr("Control Center")
-    })
-    readonly property var pillNames: ({
-        wifi: qsTr("Wi-Fi"), bluetooth: qsTr("Bluetooth"), night: qsTr("Night Light"), power: qsTr("Power profile"),
-        dark: qsTr("Dark style"), dnd: qsTr("Do Not Disturb"), aurora: qsTr("Aurora wallpaper")
     })
     readonly property var zones: [["left", qsTr("Left")], ["center", qsTr("Middle")], ["right", qsTr("Right")],
                                   ["", qsTr("Hidden")]]
@@ -212,39 +208,11 @@ Kirigami.ScrollablePage {
                 Kirigami.FormData.isSection: true
                 Kirigami.FormData.label: qsTr("Control Center")
             }
-            Repeater {
-                model: barSettings.pills
-                delegate: RowLayout {
-                    id: pillRow
-                    required property string modelData
-                    readonly property bool on: (barSettings.values.pills || []).indexOf(modelData) >= 0
-                    Kirigami.FormData.label: page.pillNames[modelData] + ":"
-                    QQC2.Switch {
-                        checked: pillRow.on
-                        onToggled: {
-                            barSettings.setPill(pillRow.modelData, checked);
-                            checked = Qt.binding(() => pillRow.on);
-                        }
-                    }
-                    QQC2.ToolButton {
-                        icon.name: "go-up"
-                        enabled: pillRow.on
-                        QQC2.ToolTip.text: qsTr("Earlier")
-                        QQC2.ToolTip.visible: hovered
-                        onClicked: barSettings.movePill(pillRow.modelData, -1)
-                    }
-                    QQC2.ToolButton {
-                        icon.name: "go-down"
-                        enabled: pillRow.on
-                        QQC2.ToolTip.text: qsTr("Later")
-                        QQC2.ToolTip.visible: hovered
-                        onClicked: barSettings.movePill(pillRow.modelData, 1)
-                    }
-                }
-            }
-            BarToggle {
-                Kirigami.FormData.label: qsTr("What's playing:")
-                key: "media"
+            QQC2.Button {
+                Kirigami.FormData.label: qsTr("Toggles and sliders:")
+                text: qsTr("Control Center settings…")
+                icon.name: "adjustlevels"
+                onClicked: applicationWindow().showPage("controls")
             }
 
             Kirigami.Separator {

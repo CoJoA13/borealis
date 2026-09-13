@@ -1,6 +1,6 @@
 /*
     The Control Center's button: network, Bluetooth, sound and battery at a
-    glance.
+    glance (whichever the settings keep).
     SPDX-License-Identifier: GPL-3.0-or-later
 */
 import QtQuick
@@ -12,9 +12,11 @@ BarButton {
 
     property var window
     readonly property var status: window ? window.status : null
-    readonly property bool showNet: !!status && !!status.net && status.net.available
-    readonly property bool showBt: !!status && !!status.bt && status.bt.on
-    readonly property bool showSound: !!status && !!status.sound && status.sound.available
+    readonly property var glyphs: bar.settings.values.glyphs || []
+    readonly property bool showNet: glyphs.indexOf("network") >= 0 && !!status && !!status.net && status.net.available
+    readonly property bool showBt: glyphs.indexOf("bluetooth") >= 0 && !!status && !!status.bt && status.bt.on
+    readonly property bool showSound: glyphs.indexOf("sound") >= 0 && !!status && !!status.sound && status.sound.available
+    readonly property bool showBattery: glyphs.indexOf("battery") >= 0 && bar.battery.present
 
     function batteryIcon(percent, charging) {
         const level = Math.max(0, Math.min(100, Math.round(percent / 10) * 10));
@@ -52,7 +54,7 @@ BarButton {
         }
         Row {
             anchors.verticalCenter: parent.verticalCenter
-            visible: bar.battery.present
+            visible: controls.showBattery
             spacing: 3
             Kirigami.Icon {
                 anchors.verticalCenter: parent.verticalCenter
@@ -62,15 +64,17 @@ BarButton {
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
+                visible: bar.settings.values.batteryPercent !== false
                 text: bar.battery.percent + "%"
                 font.pointSize: Kirigami.Theme.smallFont.pointSize
                 font.features: { "tnum": 1 }
                 color: Kirigami.Theme.textColor
             }
         }
+        // with nothing else to show, a plain button still opens the Control Center
         Kirigami.Icon {
             anchors.verticalCenter: parent.verticalCenter
-            visible: !controls.showNet && !controls.showBt && !controls.showSound && !bar.battery.present
+            visible: !controls.showNet && !controls.showBt && !controls.showSound && !controls.showBattery
             source: "configure"
             width: 16
             height: 16

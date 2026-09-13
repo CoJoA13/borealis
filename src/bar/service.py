@@ -33,6 +33,7 @@ class BarService(QObject):
             "buttons": {name: [screen, r.x(), r.y(), r.width(), r.height()]
                         for name, (screen, r) in bar.buttons().items()},
             "toggles": bar.toggles,
+            "controls": bar.controls_state(),
         }, default=str)
 
     def _anchor(self, name):
@@ -45,9 +46,18 @@ class BarService(QObject):
 
     @Slot(str, result=bool)
     def Open(self, name):
-        """"system", "clock", "controls", "drives", "app:<n>" (the nth menu title)
-        or "tray:<n>" (the nth tray icon's menu)."""
+        """"system", "clock", "controls", "drives", "app:<n>" (the nth menu title),
+        "tray:<n>" (the nth tray icon's menu), or "controls:<page>" for a
+        Control Center page (wifi, bluetooth, sound, power, dnd, hotspot,
+        screenshot, record) or its edit mode ("controls:edit")."""
         bar = self.bar
+        if name.startswith("controls:"):
+            anchor = self._anchor("controls")
+            if anchor is None:
+                return False
+            bar.openPanel("controls", *anchor)
+            bar.show_controls_page(name[9:])
+            return True
         if name.startswith("app:"):
             titles = bar.appmenu.titles
             index = int(name[4:]) if name[4:].isdigit() else -1

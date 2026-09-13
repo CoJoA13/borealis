@@ -63,17 +63,25 @@ QtObject {
         const until = center.settings.notificationsInhibitedUntil;
         return (!isNaN(until) && until > center.now) || center.settings.notificationsInhibitedByApplication;
     }
+    // when Do Not Disturb ends by itself (not a valid date while it's off)
+    readonly property date doNotDisturbUntil: center.settings.notificationsInhibitedUntil
+    readonly property bool doNotDisturbByApp: !!center.settings.notificationsInhibitedByApplication
     readonly property int unread: history.unreadNotificationsCount
     readonly property int jobType: NotificationManager.Notifications.JobType
     readonly property int criticalUrgency: NotificationManager.Notifications.CriticalUrgency
 
     function setDoNotDisturb(minutes) {
         if (minutes > 0) {
-            settings.notificationsInhibitedUntil = new Date(Date.now() + minutes * 60000);
-        } else {
-            settings.notificationsInhibitedUntil = new Date(NaN);
-            settings.revokeApplicationInhibitions();
+            setDoNotDisturbUntil(new Date(Date.now() + minutes * 60000));
+            return;
         }
+        settings.notificationsInhibitedUntil = new Date(NaN);
+        settings.revokeApplicationInhibitions();
+        settings.save();
+        now = new Date();
+    }
+    function setDoNotDisturbUntil(date) {
+        settings.notificationsInhibitedUntil = date;
         settings.save();
         now = new Date();
     }

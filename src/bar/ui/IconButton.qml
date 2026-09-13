@@ -18,9 +18,11 @@ Rectangle {
     width: size
     height: size
     radius: size / 2
+    opacity: enabled ? 1 : 0.4
     color: checked ? Kirigami.Theme.highlightColor
          : hover.hovered ? Qt.rgba(fg.r, fg.g, fg.b, 0.14) : Qt.rgba(fg.r, fg.g, fg.b, 0.06)
     Accessible.name: tip
+    Accessible.role: Accessible.Button
 
     Kirigami.Icon {
         anchors.centerIn: parent
@@ -34,6 +36,8 @@ Rectangle {
         cursorShape: Qt.PointingHandCursor
     }
     TapHandler {
+        // keeps the press, so a row or card this sits on doesn't take the click too
+        gesturePolicy: TapHandler.ReleaseWithinBounds
         onTapped: button.clicked()
     }
 }

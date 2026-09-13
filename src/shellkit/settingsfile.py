@@ -28,6 +28,18 @@ def load_values(path, sanitize):
         return sanitize({})
 
 
+def plain(value):
+    """What QML hands over, as plain Python: a JavaScript array or object can
+    arrive wrapped (a QJSValue) rather than as a list or dict."""
+    if hasattr(value, "toVariant"):
+        value = value.toVariant()
+    if isinstance(value, dict):
+        return {str(k): plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [plain(v) for v in value]
+    return value
+
+
 def write_values(path, values):
     """Atomically, so a watcher never reads half a file; returns the text."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -99,7 +111,7 @@ class SettingsFile(QObject):
 
     @Slot("QVariantMap")
     def update(self, changes):
-        values = self._sanitize({**self._values, **dict(changes)})
+        values = self._sanitize({**self._values, **plain(dict(changes))})
         if values != self._values:
             self._values = values
             self._save()
