@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from tokens import IDS, NAME, SLUG  # noqa: E402
-from gen_dock import ids_py  # noqa: E402
+from gen_dock import copy_shellkit, ids_py  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP_ID = f"org.{SLUG.lower()}.tweaks"
@@ -54,6 +54,9 @@ def build(out_root):
     shutil.copy(os.path.join(HERE, "dock", "settings.py"), os.path.join(app, "docksettings.py"))
     shutil.copy(os.path.join(HERE, "dock", "stacks.py"), os.path.join(app, "dockstacks.py"))
     shutil.copy(os.path.join(HERE, "dock", "presets.py"), os.path.join(app, "dockpresets.py"))
+    # and the Bar page the bar's settings, with the bar's code
+    shutil.copy(os.path.join(HERE, "bar", "settings.py"), os.path.join(app, "barsettings.py"))
+    copy_shellkit(app)
     with open(os.path.join(app, "ids.py"), "w") as f:
         f.write(ids_py())
     apps = os.path.join(out_root, "applications")

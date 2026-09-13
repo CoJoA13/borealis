@@ -26,6 +26,7 @@ Kirigami.ApplicationWindow {
 
     readonly property var pageComponents: ({
         theme: themePage,
+        bar: barPage,
         dock: dockPage,
         system: systemPage
     })
@@ -65,6 +66,13 @@ Kirigami.ApplicationWindow {
                 onTriggered: root.showPage("theme")
             },
             Kirigami.Action {
+                text: qsTr("Bar")
+                icon.name: "application-menu"
+                checkable: true
+                checked: root.page === "bar"
+                onTriggered: root.showPage("bar")
+            },
+            Kirigami.Action {
                 text: qsTr("Dock")
                 icon.name: "preferences-desktop-display"
                 checkable: true
@@ -94,6 +102,11 @@ Kirigami.ApplicationWindow {
     Component {
         id: themePage
         ThemePage {}
+    }
+
+    Component {
+        id: barPage
+        BarPage {}
     }
 
     Component {

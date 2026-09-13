@@ -18,6 +18,10 @@ import sys
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
+# what the dock shares with the bar lives in src/shellkit; a built copy has
+# those files right here instead
+if os.path.isdir(os.path.join(HERE, "..", "shellkit")):
+    sys.path.insert(1, os.path.join(HERE, "..", "shellkit"))
 
 import ids  # noqa: E402
 

@@ -1,8 +1,9 @@
-"""What the dock's widgets show: the battery (UPower) and what's playing (MPRIS).
+"""The battery (UPower) and what's playing (MPRIS), for the dock's widgets and
+the bar's Control Center.
 
 Both are read through busctl's JSON output, which copes with the nested
 variants these D-Bus APIs are full of; their change signals only say when to
-read again. Nothing is watched while its widget isn't in the dock.
+read again. Nothing is watched while nobody shows it.
 """
 import json
 import time
@@ -13,36 +14,7 @@ from PySide6.QtDBus import QDBusConnection, QDBusMessage
 PROPERTIES = "org.freedesktop.DBus.Properties"
 
 
-def unwrap(node):
-    """busctl's {"type": …, "data": …} -> plain values."""
-    if isinstance(node, dict):
-        if set(node) == {"type", "data"}:
-            return unwrap(node["data"])
-        return {k: unwrap(v) for k, v in node.items()}
-    if isinstance(node, list):
-        return [unwrap(v) for v in node]
-    return node
-
-
-def busctl(parent, args, done=None):
-    """Runs busctl in the background; `done` gets one value per JSON line."""
-    proc = QProcess(parent)
-
-    def finished(*_):
-        out = bytes(proc.readAllStandardOutput()).decode(errors="replace")
-        proc.deleteLater()
-        values = []
-        for line in out.splitlines():
-            try:
-                values.append(unwrap(json.loads(line)))
-            except ValueError:
-                pass
-        if done:
-            done(values)
-
-    proc.finished.connect(finished)
-    proc.start("busctl", args)
-    return proc
+from busctl import busctl, unwrap  # noqa: E402,F401  (shared with the bar, in shellkit)
 
 
 def duration(seconds):

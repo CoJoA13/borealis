@@ -1,11 +1,9 @@
 """Dock settings: one JSON file, watched, so Borealis Tweaks (or a text editor)
 changes the dock while it runs."""
-import json
 import os
 
-from PySide6.QtCore import Property, QFileSystemWatcher, QObject, QTimer, Signal, Slot
-
 import ids
+import settingsfile
 
 SCHEMA = 1
 DEFAULTS = {
@@ -60,38 +58,17 @@ CHOICES = {
     "clickAction": ("expose", "cycle", "minimize"),
 }
 
+read_text = settingsfile.read_text
+write_values = settingsfile.write_values
+
 
 def config_path():
-    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    return os.path.join(base, ids.SLUG, "dock.json")
-
-
-def read_text(path):
-    try:
-        with open(path) as f:
-            return f.read()
-    except OSError:
-        return None
+    return os.path.join(settingsfile.config_home(), ids.SLUG, "dock.json")
 
 
 def load_values(path=None):
     """The settings as the dock would see them, without watching anything."""
-    raw = read_text(path or config_path())
-    try:
-        return sanitize(json.loads(raw) if raw else {})
-    except ValueError:
-        return sanitize({})
-
-
-def write_values(path, values):
-    """Atomically, so a watcher never reads half a file; returns the text."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    text = json.dumps(values, indent=2) + "\n"
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        f.write(text)
-    os.replace(tmp, path)
-    return text
+    return settingsfile.load_values(path or config_path(), sanitize)
 
 
 def sanitize(data):
@@ -141,67 +118,9 @@ def sanitize(data):
     return out
 
 
-class Settings(QObject):
-    changed = Signal()
-
+class Settings(settingsfile.SettingsFile):
     def __init__(self, path=None, parent=None):
-        super().__init__(parent)
-        self.path = path or config_path()
-        self._values = sanitize({})
-        self._raw = None
-        self._watcher = QFileSystemWatcher(self)
-        self._reload = QTimer(self, singleShot=True, interval=150)
-        self._reload.timeout.connect(self.load)
-        self._watcher.fileChanged.connect(lambda *_: self._reload.start())
-        self._watcher.directoryChanged.connect(lambda *_: self._reload.start())
-        self.load()
-
-    def _watch(self):
-        # the nearest folder that exists: a settings folder created later (by
-        # Tweaks, or by hand) still announces itself through its parent
-        folder = os.path.dirname(self.path)
-        while folder and not os.path.isdir(folder) and os.path.dirname(folder) != folder:
-            folder = os.path.dirname(folder)
-        if folder and folder not in self._watcher.directories():
-            self._watcher.addPath(folder)
-        if os.path.exists(self.path) and self.path not in self._watcher.files():
-            self._watcher.addPath(self.path)
-
-    @Slot()
-    def load(self):
-        raw = read_text(self.path)
-        self._watch()
-        if raw is not None and raw == self._raw:
-            return
-        self._raw = raw
-        try:
-            data = json.loads(raw) if raw else {}
-        except ValueError:
-            return          # caught mid-write: the next change event brings the whole file
-        values = sanitize(data)
-        if values != self._values:
-            self._values = values
-            self.changed.emit()
-
-    def _save(self):
-        self._raw = write_values(self.path, self._values)
-        self._watch()
-
-    @Property("QVariantMap", notify=changed)
-    def values(self):
-        return self._values
+        super().__init__(path or config_path(), sanitize, parent)
 
     def get(self, key):
         return self._values.get(key, DEFAULTS.get(key))
-
-    @Slot(str, "QVariant")
-    def set(self, key, value):
-        self.update({key: value})
-
-    @Slot("QVariantMap")
-    def update(self, changes):
-        values = sanitize({**self._values, **dict(changes)})
-        if values != self._values:
-            self._values = values
-            self._save()
-            self.changed.emit()

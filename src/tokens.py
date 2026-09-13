@@ -36,6 +36,8 @@ IDS = {
     # the standalone dock: app id, D-Bus name, KWin bridge script, command name
     "dockapp": f"org.{SLUG.lower()}.dockapp", "dockbus": f"org.{SLUG.lower()}.Dock",
     "dockbridge": f"{SLUG.lower()}-dockbridge", "dockexe": f"{SLUG.lower()}-dock",
+    # the standalone top bar: app id, D-Bus name, command name
+    "barapp": f"org.{SLUG.lower()}.bar", "barbus": f"org.{SLUG.lower()}.Bar", "barexe": f"{SLUG.lower()}-bar",
     "logo": SLUG.lower(),
 }
 

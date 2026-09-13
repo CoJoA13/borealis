@@ -20,6 +20,7 @@ try:                        # installed: copies made by gen_tweaks.py
 except ImportError:         # the source tree: use the dock's own modules
     import sys
     sys.path.insert(1, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "dock"))
+    sys.path.insert(2, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "shellkit"))
     import ids
     import settings as docksettings
     import stacks as dockstacks

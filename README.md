@@ -46,6 +46,7 @@ Built for Fedora 44 / Plasma 6.7.
 | Desktop layout | built into each Global Theme | Floating top bar (launcher, global menu, centered clock, tray) + floating dock |
 | Konsole / Kate | Borealis Dark / Light | Terminal schemes + profiles, editor themes |
 | Dock | **Borealis Dock** | A standalone macOS-style dock: icons swell *above* the shelf, running dots, pinned ┆ open ┆ trash, drag to reorder or pull off to unpin, three hide modes, any screen edge, live window previews, Launchpad, Stacks, clock/battery/now-playing widgets and shareable presets (`--dock`; a panel-widget version remains as the fallback) |
+| Top bar | **Borealis Bar** | A standalone top bar: the Borealis menu, the app's menus, a centred clock with notifications and a calendar, tray icons, USB drives and a Control Center (`--bar`; a Plasma panel remains the fallback) |
 | Quick Settings | **Borealis Quick Settings** | Wi-Fi, Bluetooth, Night Light, power profile, light/dark, animated wallpaper, brightness and volume in one popup |
 | Tweaks app | **Borealis Tweaks** | Switch variant, remix the palette onto any colour, toggle the animated aurora, undo |
 | Firefox | `borealis-userChrome.css` | Toolbars, tabs, address bar and menus in Borealis (`--firefox`) |
@@ -168,6 +169,50 @@ With `make` installed, `make`, `make check`, `make test`, `make package` and
 `make apply` wrap the same scripts.
 
 Palette, radii and translucency live in `src/tokens.py`.
+
+### The Borealis Bar
+
+**Borealis Bar** takes the place of the top Plasma panel with a bar drawn like
+the dock: a floating frosted strip that turns flush and solid while a window is
+maximized.
+
+```bash
+./install.sh --bar          # start it, keep it at login, retire the top panel (backed up)
+./install.sh --bar-revert   # back to a Plasma top panel
+```
+
+- The Borealis menu at the left: About This Computer, System Settings, Borealis
+  Tweaks, Force Quit the app in front, Sleep, Restart, Shut Down, Lock Screen
+  and Log Out.
+- The name of the app in front and its menus (File, Edit, View…), the way
+  Plasma's global menu shows them. With one open, move along the titles to
+  switch menus.
+- The clock in the middle. Click it for your notifications beside a calendar,
+  with Do Not Disturb; a dot by the time means something new arrived. The bar
+  is the desktop's notification server, so new notifications (and file copy
+  progress) show up as banners under it, buttons and all.
+- Apps' tray icons: click, right-click for their menu, middle-click, scroll.
+- A drive icon while a USB stick or memory card is plugged in: open it, or
+  remove it safely.
+- The Control Center: battery and session buttons, brightness and volume
+  sliders, what's playing, and toggles for Wi-Fi, Bluetooth, Night Light, the
+  power profile, dark style, Do Not Disturb and the animated aurora.
+
+Everything is on the **Bar** page of Borealis Tweaks and applies as you change
+it: the look, which items sit left, middle or right, the clock, where banners
+appear, the Control Center's toggles and which tray icons show. The page writes
+`~/.config/borealis/bar.json`, which the bar watches: `screen`, `height`,
+`floating`, `gap`, `radius`, `opacity`, `blur`, `border`, `flush`, `left`,
+`center`, `right`, `clockDate`, `clockWeekday`, `clockSeconds`, `clockHours`,
+`banners`, `bannerPosition`, `pills`, `media`, `trayHidden`.
+
+How it fits together: KWin shares its list of windows (which is where the menu
+of the app in front comes from) only with programs it trusts by their
+`.desktop` entry. The bar runs under a private copy of the Python interpreter
+(`~/.local/share/borealis-bar/bin/borealis-bar`) that its entry names, so only
+that copy gets the list, not every Python program. Plasma's own libraries do
+the rest: notifications, network, Bluetooth, sound and brightness. The bar runs
+as a systemd user service (`systemctl --user status borealis-bar`).
 
 ### The dock and Quick Settings
 

@@ -37,6 +37,7 @@ app = QGuiApplication(["tweakscheck"])
 
 from backend import Backend  # noqa: E402
 from dockpage import DockBackend  # noqa: E402
+from barpage import BarBackend  # noqa: E402
 import main as tweaks_main  # noqa: E402
 
 
@@ -80,9 +81,11 @@ def main():
     engine = QQmlApplicationEngine()
     backend = Backend(app)
     dock = DockBackend(backend, app)
+    bar = BarBackend(backend, app)
     ctx = engine.rootContext()
     ctx.setContextProperty("backend", backend)
     ctx.setContextProperty("dockSettings", dock)
+    ctx.setContextProperty("barSettings", bar)
     ctx.setContextProperty("startPage", "theme")
     engine.load(QUrl.fromLocalFile(os.path.join(TWEAKS, "ui", "main.qml")))
     if not engine.rootObjects():

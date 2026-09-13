@@ -130,30 +130,33 @@ for (var j = 0; j < desktopsArray.length; j++) {
     desktopsArray[j].wallpaperPlugin = "org.kde.image";
 }
 
-var bar = new Panel;
-bar.location = "top";
-bar.height = 2 * Math.ceil(gridUnit * 1.6 / 2);
-bar.floating = true;
-bar.lengthMode = "fill";
-bar.alignment = "center";
-bar.hiding = "none";
-bar.opacity = "adaptive";
+// the standalone Borealis Bar replaces the top panel when it is installed
+if (!applicationExists("@BAREXE@")) {
+    var bar = new Panel;
+    bar.location = "top";
+    bar.height = 2 * Math.ceil(gridUnit * 1.6 / 2);
+    bar.floating = true;
+    bar.lengthMode = "fill";
+    bar.alignment = "center";
+    bar.hiding = "none";
+    bar.opacity = "adaptive";
 
-var kickoff = bar.addWidget("org.kde.plasma.kickoff");
-kickoff.currentConfigGroup = ["General"];
-kickoff.writeConfig("icon", "start-here-kde");
-kickoff.globalShortcut = "Alt+F1";
-bar.addWidget("org.kde.plasma.appmenu");
-bar.addWidget("org.kde.plasma.panelspacer");
-var clock = bar.addWidget("org.kde.plasma.digitalclock");
-clock.currentConfigGroup = ["Appearance"];
-clock.writeConfig("showDate", true);
-clock.writeConfig("dateDisplayFormat", "BesideTime");
-clock.writeConfig("dateFormat", "custom");
-clock.writeConfig("customDateFormat", "ddd d MMM");
-bar.addWidget("org.kde.plasma.panelspacer");
-bar.addWidget("@QUICK@");
-bar.addWidget("org.kde.plasma.systemtray");
+    var kickoff = bar.addWidget("org.kde.plasma.kickoff");
+    kickoff.currentConfigGroup = ["General"];
+    kickoff.writeConfig("icon", "start-here-kde");
+    kickoff.globalShortcut = "Alt+F1";
+    bar.addWidget("org.kde.plasma.appmenu");
+    bar.addWidget("org.kde.plasma.panelspacer");
+    var clock = bar.addWidget("org.kde.plasma.digitalclock");
+    clock.currentConfigGroup = ["Appearance"];
+    clock.writeConfig("showDate", true);
+    clock.writeConfig("dateDisplayFormat", "BesideTime");
+    clock.writeConfig("dateFormat", "custom");
+    clock.writeConfig("customDateFormat", "ddd d MMM");
+    bar.addWidget("org.kde.plasma.panelspacer");
+    bar.addWidget("@QUICK@");
+    bar.addWidget("org.kde.plasma.systemtray");
+}
 
 // the standalone Borealis Dock replaces the panel dock when it is installed
 if (!applicationExists("@DOCKEXE@")) {
@@ -258,7 +261,8 @@ def switcher(dest):
 def build(out_root, night, dawn, layout_js=None, previews=None):
     layout_js = ((layout_js or LAYOUT_JS).replace("@DOCK@", IDS["dock"])
                  .replace("@QUICK@", IDS["quicksettings"])
-                 .replace("@DOCKEXE@", IDS["dockexe"]))
+                 .replace("@DOCKEXE@", IDS["dockexe"])
+                 .replace("@BAREXE@", IDS["barexe"]))
     base = os.path.join(out_root, "plasma", "look-and-feel")
     made = []
     for vid, pkg in PACKAGES.items():

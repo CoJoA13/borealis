@@ -141,6 +141,11 @@ def step_lnf():
     gen_lnf.build(OUT, night, dawn, previews=gen_lnf.previews_from_shots(shots))
 
 
+def step_bar():
+    import gen_bar
+    gen_bar.build(OUT)
+
+
 STEPS = {
     "colors": step_colors,
     "apps": step_apps,
@@ -157,6 +162,7 @@ STEPS = {
     "grub": step_grub,
     "firefox": step_firefox,
     "dock": step_dock,
+    "bar": step_bar,
     "tweaks": step_tweaks,
     "gtk": step_gtk,
     "lnf": step_lnf,

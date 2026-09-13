@@ -191,7 +191,7 @@ def check_installer():
     missing = []
     for entry in sorted(os.listdir(SHARE)):
         path = os.path.join(SHARE, entry)
-        if not os.path.isdir(path) or entry in handled or entry.endswith(("-tweaks", "-dock")):
+        if not os.path.isdir(path) or entry in handled or entry.endswith(("-tweaks", "-dock", "-bar")):
             continue
         if entry in known:
             continue

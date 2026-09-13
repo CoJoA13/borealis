@@ -20,9 +20,10 @@ except ImportError:
 
 from backend import Backend  # noqa: E402
 from dockpage import DockBackend  # noqa: E402
+from barpage import BarBackend  # noqa: E402
 
 # the pages in ui/main.qml's sidebar, by name
-PAGES = ("theme", "dock", "system")
+PAGES = ("theme", "bar", "dock", "system")
 
 
 def main():
@@ -37,8 +38,10 @@ def main():
     engine = QQmlApplicationEngine()
     backend = Backend(app)   # owned by the app, so QML never sees it vanish
     dock = DockBackend(backend, app)
+    bar = BarBackend(backend, app)
     engine.rootContext().setContextProperty("backend", backend)
     engine.rootContext().setContextProperty("dockSettings", dock)
+    engine.rootContext().setContextProperty("barSettings", bar)
     engine.rootContext().setContextProperty("startPage", args.page)
     engine.load(QUrl.fromLocalFile(os.path.join(HERE, "ui", "main.qml")))
     if not engine.rootObjects():

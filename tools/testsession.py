@@ -485,6 +485,53 @@ print(rows[1] if len(rows) > 1 else "")' "$SANDBOX/sdock-two-windows.json")
     stop "$SDPID" "$S1" "$S2"
     sleep 1
 fi
+if [ "$BAR" = 1 ]; then
+    # the standalone bar, under its interpreter copy so KWin shares the window
+    # list; a stand-in UDisks2 on the session bus lends it a USB stick
+    bs() { qdbus-qt6 "$BAR_BUS" /Bar "${BAR_BUS}1.$1" "${@:2}" 2>&1; }
+    busctl --user status org.kde.StatusNotifierWatcher >/dev/null 2>&1 || { kded6 >/dev/null 2>&1 & KDEDPID=$!; sleep 3; }
+    python3 "$SANDBOX/fake_udisks.py" > "$SANDBOX/bar-udisks.log" 2>&1 &
+    B1=$!
+    BOREALIS_BAR_UDISKS=session QT_FORCE_STDERR_LOGGING=1 "$BAR_PYTHON" "$BAR_APP/main.py" > "$SANDBOX/bar.log" 2>&1 &
+    BARPID=$!
+    sleep 6
+    # apps look for the global-menu registrar as they start, and the bar is what
+    # keeps it running: start one after the bar
+    kwrite "$HOME/Projects/borealis/README.md" >/dev/null 2>&1 &
+    B2=$!
+    sleep 6
+    python3 "$SANDBOX/tray_app.py" > "$SANDBOX/bar-tray.log" 2>&1 &
+    B3=$!
+    sleep 5
+    bs State > "$SANDBOX/bar-state.json"
+    shot bar-rest
+    bs Open system >> "$SANDBOX/bar-steps.log"; sleep 1.5; shot bar-menu; bs Close; sleep 0.8
+    bs Open app:0 >> "$SANDBOX/bar-steps.log"; sleep 2; shot bar-appmenu; bs Close; sleep 0.8
+    notify-send -a KWrite --hint=string:desktop-entry:org.kde.kwrite -A ok=OK -A later=Later \
+        "Build finished" "Borealis built in 31 seconds" > "$SANDBOX/bar-notify.log" 2>&1 &
+    B4=$!
+    sleep 2.5
+    shot bar-banner
+    bs Open clock >> "$SANDBOX/bar-steps.log"; sleep 1.5; shot bar-clock; bs Close; sleep 0.8
+    bs Open controls >> "$SANDBOX/bar-steps.log"; sleep 2; shot bar-controls; bs Close; sleep 0.8
+    bs Open tray:0 >> "$SANDBOX/bar-steps.log"; sleep 1.5; shot bar-tray
+    bs Trigger Hello >> "$SANDBOX/bar-steps.log"; sleep 1
+    bs Open drives >> "$SANDBOX/bar-steps.log"; sleep 1.5; shot bar-drives; bs Close; sleep 0.8
+    qd org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$SANDBOX/bar-maximize.js" borealis-bar-max
+    qd org.kde.KWin /Scripting org.kde.kwin.Scripting.start
+    sleep 3
+    bs State > "$SANDBOX/bar-state-maximized.json"
+    shot bar-maximized
+    "$XDG_DATA_HOME"/*-tweaks/main.py --page bar > "$SANDBOX/bar-tweaks.log" 2>&1 &
+    TW=$!
+    sleep 7
+    shot bar-tweaks
+    stop "$TW"
+    bs Quit > /dev/null
+    sleep 1
+    stop "$B4" "$B3" "$B2" "$BARPID" "$B1" "${KDEDPID:-}"
+    sleep 1
+fi
 stop "$SHELLPID"
 sleep 1
 """
@@ -750,6 +797,108 @@ QTimer.singleShot(180000, app.quit)
 app.exec()
 """
 
+FAKE_UDISKS = r"""# A stand-in UDisks2 on the session bus with one USB stick, for the bar's run.
+import dbus
+import dbus.service
+from dbus.mainloop.glib import DBusGMainLoop
+from gi.repository import GLib
+
+ROOT = "/org/freedesktop/UDisks2"
+DRIVE = ROOT + "/drives/Test_Stick"
+BLOCK = ROOT + "/block_devices/sdz1"
+state = {"mounted": False}
+
+
+def objects():
+    mounts = dbus.Array([dbus.ByteArray(b"/run/media/test/PHOTOS\0")], signature="ay") if state["mounted"] \
+        else dbus.Array([], signature="ay")
+    return dbus.Dictionary({
+        dbus.ObjectPath(DRIVE): dbus.Dictionary({
+            "org.freedesktop.UDisks2.Drive": dbus.Dictionary({
+                "Removable": dbus.Boolean(True), "Ejectable": dbus.Boolean(False),
+                "CanPowerOff": dbus.Boolean(True), "Model": dbus.String("Test Stick"),
+                "ConnectionBus": dbus.String("usb")}, signature="sv")}, signature="sa{sv}"),
+        dbus.ObjectPath(BLOCK): dbus.Dictionary({
+            "org.freedesktop.UDisks2.Block": dbus.Dictionary({
+                "HintIgnore": dbus.Boolean(False), "HintSystem": dbus.Boolean(False),
+                "Drive": dbus.ObjectPath(DRIVE), "IdLabel": dbus.String("PHOTOS"),
+                "Size": dbus.UInt64(32_000_000_000),
+                "PreferredDevice": dbus.ByteArray(b"/dev/sdz1\0")}, signature="sv"),
+            "org.freedesktop.UDisks2.Filesystem": dbus.Dictionary({"MountPoints": mounts}, signature="sv"),
+        }, signature="sa{sv}"),
+    }, signature="oa{sa{sv}}")
+
+
+class Manager(dbus.service.Object):
+    @dbus.service.method("org.freedesktop.DBus.ObjectManager", out_signature="a{oa{sa{sv}}}")
+    def GetManagedObjects(self):
+        return objects()
+
+
+class Filesystem(dbus.service.Object):
+    @dbus.service.method("org.freedesktop.UDisks2.Filesystem", in_signature="a{sv}", out_signature="s")
+    def Mount(self, options):
+        state["mounted"] = True
+        return "/run/media/test/PHOTOS"
+
+    @dbus.service.method("org.freedesktop.UDisks2.Filesystem", in_signature="a{sv}")
+    def Unmount(self, options):
+        state["mounted"] = False
+
+
+class Drive(dbus.service.Object):
+    @dbus.service.method("org.freedesktop.UDisks2.Drive", in_signature="a{sv}")
+    def PowerOff(self, options):
+        print("powered off", flush=True)
+
+
+DBusGMainLoop(set_as_default=True)
+bus = dbus.SessionBus()
+name = dbus.service.BusName("org.freedesktop.UDisks2", bus)
+Manager(bus, ROOT)
+Filesystem(bus, BLOCK)
+Drive(bus, DRIVE)
+GLib.MainLoop().run()
+"""
+
+TRAY_APP = r"""# A Qt tray icon with a small menu, for the bar's run.
+import sys
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+
+app = QApplication(sys.argv)
+app.setDesktopFileName("org.borealis.traytest")
+state = {}
+
+
+def start():
+    if not QSystemTrayIcon.isSystemTrayAvailable():
+        QTimer.singleShot(500, start)
+        return
+    icon = QSystemTrayIcon(QIcon.fromTheme("dialog-information"))
+    menu = QMenu()
+    hello = QAction("Hello", menu)
+    hello.triggered.connect(lambda: print("hello triggered", flush=True))
+    menu.addAction(hello)
+    menu.addSeparator()
+    menu.addAction(QAction("Quit", menu))
+    icon.setContextMenu(menu)
+    icon.setToolTip("Borealis test")
+    icon.show()
+    state["icon"], state["menu"] = icon, menu
+    print("tray icon shown", flush=True)
+
+
+start()
+QTimer.singleShot(120000, app.quit)
+app.exec()
+"""
+
+BAR_MAXIMIZE_JS = r"""
+workspace.activeWindow.setMaximize(true, true);
+"""
+
 MAXIMIZE_JS = r"""
 const wins = workspace.windowList();
 for (let i = 0; i < wins.length; i++) {
@@ -810,6 +959,8 @@ def main():
     ap.add_argument("--quicksettings", action="store_true", help="open the Quick Settings widget in a window")
     ap.add_argument("--standalone-dock", action="store_true",
                     help="run the standalone dock with its KWin bridge (hover, click, menu)")
+    ap.add_argument("--bar", action="store_true",
+                    help="run the standalone bar (menus, tray, notifications, Control Center, drives)")
     ap.add_argument("--remix", metavar="HEX", default="",
                     help="also remix onto this accent through the app's backend, e.g. '#4fbf6a'")
     args = ap.parse_args()
@@ -872,6 +1023,31 @@ def main():
         with open(os.path.join(fakebin, "systemd-run"), "w") as f:
             f.write('#!/bin/sh\nwhile [ $# -gt 0 ] && [ "$1" != "--" ]; do shift; done\nshift\nexec "$@"\n')
         os.chmod(os.path.join(fakebin, "systemd-run"), 0o755)
+    bar_bus = bar_app = bar_python = ""
+    if args.bar:
+        import glob
+        import re
+        bar_app = next(iter(glob.glob(os.path.join(data, "*-bar"))), "")
+        if not bar_app:
+            sys.exit("the standalone bar isn't built: ./build.py bar")
+        name = os.path.basename(bar_app)
+        bar_bus = re.search(r"^BUS = ['\"](.+)['\"]$", open(os.path.join(bar_app, "ids.py")).read(), re.M).group(1)
+        # as install.sh does it: KWin shares its window list with the private
+        # interpreter copy the bar's .desktop entry names
+        os.makedirs(os.path.join(bar_app, "bin"), exist_ok=True)
+        bar_python = os.path.join(bar_app, "bin", name)
+        shutil.copy2(os.path.realpath(shutil.which("python3")), bar_python)
+        for entry in glob.glob(os.path.join(data, "applications", "*.desktop")):
+            text = open(entry).read()
+            if f"X-Borealis-App={name}\n" in text:
+                with open(entry, "w") as f:
+                    f.write(text.replace("@PYTHON@", bar_python).replace("@EXEC@", os.path.join(bar_app, "main.py")))
+        # the layout script asks applicationExists() for the bar's command
+        os.symlink(os.path.join(bar_app, "main.py"), os.path.join(fakebin, name))
+        for fname, text in (("fake_udisks.py", FAKE_UDISKS), ("tray_app.py", TRAY_APP),
+                            ("bar-maximize.js", BAR_MAXIMIZE_JS)):
+            with open(os.path.join(sandbox, fname), "w") as f:
+                f.write(text)
     if kwinrc:
         with open(os.path.join(sandbox, "config", "kwinrc"), "w") as f:
             f.write(kwinrc)
@@ -958,10 +1134,11 @@ def main():
         "REAL_DISPLAY": os.environ.get("DISPLAY", ":0"),
         "SDOCK": "1" if args.standalone_dock else "0", "SDOCK_BUS": sdock_bus, "SDOCK_SLUG": sdock_slug,
         "SDOCK_LAUNCHPAD": sdock_launchpad,
+        "BAR": "1" if args.bar else "0", "BAR_BUS": bar_bus, "BAR_APP": bar_app, "BAR_PYTHON": bar_python,
         "SCREEN_W": w, "SCREEN_H": h,
     }
-    # the standalone dock's run walks through every feature, and takes a while
-    cmd = ["timeout", "330" if args.standalone_dock else "120", "dbus-run-session", "--",
+    # the standalone dock's and bar's runs walk through every feature, and take a while
+    cmd = ["timeout", str(120 + 210 * args.standalone_dock + 120 * args.bar), "dbus-run-session", "--",
            "kwin_wayland", "--virtual", "--no-lockscreen",
            "--width", w, "--height", h,
            "--socket", f"wayland-borealis-{os.getpid()}"]

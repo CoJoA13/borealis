@@ -21,6 +21,9 @@
 #   --dock-revert   back to the panel dock
 #   --dock-merge    --dock, and fold the rest of a bottom panel into the top bar
 #               (its tray and clock, where the top bar has none) and remove it
+#   --bar       switch to the standalone Borealis Bar: runs it now and at every
+#               login, and retires a top panel holding only what it replaces
+#   --bar-revert    back to a Plasma top panel
 #   --from DIR  install a build from elsewhere (e.g. a remix built with
 #               ./build.py --accent … --name "Borealis Ember" --out DIR)
 #   --flatpak   ...for Flatpak apps too (implies --gtk; lets every Flatpak app
@@ -39,6 +42,7 @@ DEST="${XDG_DATA_HOME:-$HOME/.local/share}"
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}"
 
 APPLY=""; LAYOUT=0; AUTO=0; KONSOLE=0; LIVE=0; GTK=0; FLATPAK=0; TERMINAL=0; FIREFOX=0; PANELS=0; DOCK=0; DOCK_REVERT=0; DOCK_MERGE=0
+BAR=0; BAR_REVERT=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --apply) APPLY="${2:-}"; shift 2 ;;
@@ -54,8 +58,10 @@ while [ $# -gt 0 ]; do
         --dock) DOCK=1; shift ;;
         --dock-revert) DOCK_REVERT=1; shift ;;
         --dock-merge) DOCK=1; DOCK_MERGE=1; shift ;;
+        --bar) BAR=1; shift ;;
+        --bar-revert) BAR_REVERT=1; shift ;;
         --from) SRC="${2:-}"; shift 2 ;;
-        -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
+        -h|--help) awk 'NR > 1 && /^set -euo pipefail/ { exit } NR > 1' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -63,11 +69,16 @@ case "$APPLY" in ""|dark|light) ;; *) echo "--apply takes 'dark' or 'light'" >&2
 if [ $DOCK = 1 ] && [ $DOCK_REVERT = 1 ]; then
     echo "--dock and --dock-revert contradict each other" >&2; exit 2
 fi
+if [ $BAR = 1 ] && [ $BAR_REVERT = 1 ]; then
+    echo "--bar and --bar-revert contradict each other" >&2; exit 2
+fi
 if [ -z "$APPLY" ] && { [ $LAYOUT = 1 ] || [ $AUTO = 1 ] || [ $LIVE = 1 ]; }; then
     echo "--layout, --auto and --live need --apply dark|light" >&2; exit 2
 fi
 EXTRAS=0
 if [ $KONSOLE = 1 ] || [ $GTK = 1 ] || [ $TERMINAL = 1 ] || [ $FIREFOX = 1 ]; then EXTRAS=1; fi
+SWITCHES=0
+if [ $PANELS = 1 ] || [ $DOCK = 1 ] || [ $DOCK_REVERT = 1 ] || [ $BAR = 1 ] || [ $BAR_REVERT = 1 ]; then SWITCHES=1; fi
 
 if [ ! -d "$SRC" ]; then
     echo "build/share not found — building first…"
@@ -97,6 +108,7 @@ SOUND_ID="$(basename "$(ls -d "$SRC"/sounds/* 2>/dev/null | head -1)")"
 GTKCSS="$(basename "$(ls "$SRC"/gtk/*/*-libadwaita.css 2>/dev/null | head -1)")"
 TERMSRC="$(ls -d "$SRC"/terminal/* 2>/dev/null | head -1)"
 FFSRC="$(ls -d "$SRC"/firefox/* 2>/dev/null | head -1)"
+QUICK_ID="$(basename "$(ls -d "$SRC"/plasma/plasmoids/*.quicksettings 2>/dev/null | head -1)")"
 # Firefox' default profile (XDG path first: Firefox 128+ moved there)
 ff_profile() {
     python3 - <<'PYEOF'
@@ -136,8 +148,9 @@ PYEOF
 panels_update() {
         STANDALONE=0
         ls "$HOME"/.local/bin/*-dock >/dev/null 2>&1 && STANDALONE=1
+        BAR_STANDALONE=0
+        ls "$HOME"/.local/bin/*-bar >/dev/null 2>&1 && BAR_STANDALONE=1
         DOCK_ID="$(basename "$(ls -d "$SRC"/plasma/plasmoids/*.dock 2>/dev/null | head -1)")"
-        QUICK_ID="$(basename "$(ls -d "$SRC"/plasma/plasmoids/*.quicksettings 2>/dev/null | head -1)")"
         qdbus-qt6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
     var ps = panels();
     for (var i = 0; i < ps.length; i++) {
@@ -157,7 +170,7 @@ panels_update() {
             dock.currentConfigGroup = ['General'];
             dock.writeConfig('iconSize', 48);
             dock.writeConfig('magnification', 130);
-        } else if (String(p.location) === 'top' && types.indexOf('$QUICK_ID') < 0) {
+        } else if ($BAR_STANDALONE === 0 && String(p.location) === 'top' && types.indexOf('$QUICK_ID') < 0) {
             p.addWidget('$QUICK_ID');
         }
     }
@@ -346,6 +359,139 @@ print(", ".join(out))' "$CONF/$DOCK_SLUG/dock.json")"
     fi
 }
 
+# --- the standalone bar -------------------------------------------------------
+BAR_EXE=""
+bar_ids() {
+    BAR_EXE="$(basename "$(ls -d "$SRC"/*-bar 2>/dev/null | head -1)")"
+    if [ -z "$BAR_EXE" ]; then
+        echo "  the bar isn't built — run ./build.py bar" >&2
+        return 1
+    fi
+}
+bar_refresh() {     # after an update: a running bar picks up the new files
+    bar_ids 2>/dev/null || return 0
+    [ -L "$HOME/.local/bin/$BAR_EXE" ] || return 0
+    systemctl --user daemon-reload
+    systemctl --user try-restart "$BAR_EXE.service" >/dev/null 2>&1 || true
+    echo "  the bar reloaded"
+}
+launchpad_alt_f1() {   # add | remove: Alt+F1, Kickoff's key, opens Launchpad while the bar replaces the panel
+    dock_ids 2>/dev/null || return 0
+    local name
+    name="$(sed -n "s/^LAUNCHPAD_SHORTCUT = ['\"]\(.*\)['\"]\$/\1/p" "$SRC/$DOCK_EXE/ids.py")"
+    [ -n "$name" ] || return 0
+    python3 - "$1" "$name" <<'PYEOF' || true
+import json, subprocess, sys
+mode, name = sys.argv[1], sys.argv[2]
+ALT_F1 = 0x08000000 | 0x01000030
+def call(*args):
+    return subprocess.run(["busctl", "--user", "--json=short", "call", "org.kde.kglobalaccel", "/kglobalaccel",
+                           "org.kde.KGlobalAccel", *args], capture_output=True, text=True)
+ident = ["4", "kwin", name, "KWin", name]
+try:
+    keys = [s[0][0] for s in json.loads(call("shortcutKeys", "as", *ident).stdout)["data"][0] if s and s[0]]
+except (ValueError, KeyError, IndexError, TypeError):
+    sys.exit(0)
+if mode == "add" and ALT_F1 not in keys:
+    keys.append(ALT_F1)
+elif mode == "remove" and ALT_F1 in keys:
+    keys.remove(ALT_F1)
+else:
+    sys.exit(0)
+args = ["setForeignShortcutKeys", "asa(ai)", *ident, str(len(keys))]
+for key in keys:
+    args += ["1", str(key)]
+call(*args)
+PYEOF
+}
+bar_enable() {
+    bar_ids || return 1
+    local state result
+    state="$HOME/.local/state/borealis-backup/$(date +%Y%m%d-%H%M%S)-bar"
+    mkdir -p "$state"
+    for f in plasma-org.kde.plasma.desktop-appletsrc plasmashellrc; do
+        if [ -f "$CONF/$f" ]; then cp -a "$CONF/$f" "$state/"; fi
+    done
+    # the command doubles as the Global Theme layout's hint to skip the top panel
+    mkdir -p "$HOME/.local/bin"
+    ln -sfn "$DEST/$BAR_EXE/main.py" "$HOME/.local/bin/$BAR_EXE"
+    # retire top panels that only hold what the bar replaces
+    result="$(qdbus-qt6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
+    var replaced = ['org.kde.plasma.kickoff', 'org.kde.plasma.kicker', 'org.kde.plasma.kickerdash',
+                    'org.kde.plasma.appmenu', 'org.kde.plasma.digitalclock', 'org.kde.plasma.systemtray',
+                    'org.kde.plasma.notifications', 'org.kde.plasma.panelspacer', 'org.kde.plasma.marginsseparator',
+                    'org.kde.plasma.showdesktop', '$QUICK_ID'];
+    var ps = panels();
+    var out = [];
+    for (var i = 0; i < ps.length; i++) {
+        var p = ps[i];
+        if (String(p.location) !== 'top') { continue; }
+        var ids = p.widgetIds;
+        var others = [];
+        for (var j = 0; j < ids.length; j++) {
+            var t = String(p.widgetById(ids[j]).type);
+            if (replaced.indexOf(t) < 0) { others.push(t); }
+        }
+        if (others.length === 0) { p.remove(); out.push('removed'); }
+        else { out.push('kept, it also holds ' + others.join(', ')); }
+    }
+    print(out.join('; '));
+    " 2>/dev/null)" || result="couldn't reach plasmashell: remove it yourself in Edit Mode"
+    [ -n "$result" ] && echo "  top panel: $result"
+    launchpad_alt_f1 add
+    systemctl --user daemon-reload
+    systemctl --user enable "$BAR_EXE.service" >/dev/null 2>&1 || true
+    # KWin reads the bar's window-list permission from the app database, which
+    # was just rebuilt: give it a moment before the bar asks
+    sleep 2
+    if systemctl --user restart "$BAR_EXE.service" >/dev/null 2>&1; then
+        echo "  $BAR_EXE is running, and starts with every Plasma session"
+    else
+        echo "  couldn't start $BAR_EXE.service — see: journalctl --user -u $BAR_EXE"
+    fi
+    echo "  your panels were backed up to $state"
+}
+bar_revert() {
+    bar_ids || return 1
+    systemctl --user disable --now "$BAR_EXE.service" >/dev/null 2>&1 || true
+    rm -f "$HOME/.local/bin/$BAR_EXE"
+    # Kickoff comes back with the panel, and takes its Alt+F1 back from Launchpad
+    launchpad_alt_f1 remove
+    if qdbus-qt6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript "
+    var ps = panels();
+    for (var i = 0; i < ps.length; i++) {
+        if (String(ps[i].location) === 'top') { throw 'there is a top panel already'; }
+    }
+    var bar = new Panel;
+    bar.location = 'top';
+    bar.height = 2 * Math.ceil(gridUnit * 1.6 / 2);
+    bar.floating = true;
+    bar.lengthMode = 'fill';
+    bar.alignment = 'center';
+    bar.hiding = 'none';
+    bar.opacity = 'adaptive';
+    var kickoff = bar.addWidget('org.kde.plasma.kickoff');
+    kickoff.currentConfigGroup = ['General'];
+    kickoff.writeConfig('icon', 'start-here-kde');
+    kickoff.globalShortcut = 'Alt+F1';
+    bar.addWidget('org.kde.plasma.appmenu');
+    bar.addWidget('org.kde.plasma.panelspacer');
+    var clock = bar.addWidget('org.kde.plasma.digitalclock');
+    clock.currentConfigGroup = ['Appearance'];
+    clock.writeConfig('showDate', true);
+    clock.writeConfig('dateDisplayFormat', 'BesideTime');
+    clock.writeConfig('dateFormat', 'custom');
+    clock.writeConfig('customDateFormat', 'ddd d MMM');
+    bar.addWidget('org.kde.plasma.panelspacer');
+    if ('$QUICK_ID'.length > 0) { bar.addWidget('$QUICK_ID'); }
+    bar.addWidget('org.kde.plasma.systemtray');
+    " >/dev/null 2>&1; then
+        echo "  bar stopped; a Plasma top panel is back"
+    else
+        echo "  bar stopped (there was a top panel already, or plasmashell didn't answer)"
+    fi
+}
+
 meta_name() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["KPlugin"]["Name"])' "$1" 2>/dev/null; }
 TITLE_DARK="$(meta_name "$SRC/plasma/look-and-feel/$THEME_DARK/metadata.json")"
 TITLE_LIGHT="$(meta_name "$SRC/plasma/look-and-feel/$THEME_LIGHT/metadata.json")"
@@ -438,14 +584,21 @@ for item in "${ITEMS[@]}"; do
     echo "  + $item"
 done
 
-# The apps (Tweaks, the Dock): copy them, then point their launchers and the
-# dock's systemd unit at the installed copies
-for APPDIR in "$SRC"/*-tweaks "$SRC"/*-dock; do
+# The apps (Tweaks, the Dock, the Bar): copy them, then point their launchers
+# and systemd units at the installed copies
+for APPDIR in "$SRC"/*-tweaks "$SRC"/*-dock "$SRC"/*-bar; do
     [ -d "$APPDIR" ] || continue
     name="$(basename "$APPDIR")"
     rm -rf "${DEST:?}/$name"
     cp -a "$APPDIR" "$DEST/$name"
     chmod +x "$DEST/$name/main.py"
+    case "$name" in *-bar)
+        # KWin shares its window list only with the program the bar's .desktop
+        # entry names: a private copy of the interpreter, so the permission
+        # covers the bar and not every Python program
+        mkdir -p "$DEST/$name/bin"
+        cp "$(readlink -f "$(command -v python3)")" "$DEST/$name/bin/$name" && chmod 755 "$DEST/$name/bin/$name" ;;
+    esac
     ITEMS+=("$name")
     echo "  + $name"
 done
@@ -455,12 +608,16 @@ app_for() {     # the app a generated file belongs to (X-Borealis-App); Tweaks i
     [ -n "$app" ] || app="$(basename "$(ls -d "$SRC"/*-tweaks 2>/dev/null | head -1)")"
     printf '%s' "$app"
 }
+app_python() {  # the interpreter an app runs under: its private copy when it has one
+    if [ -x "$DEST/$1/bin/$1" ]; then printf '%s' "$DEST/$1/bin/$1"; else command -v python3; fi
+}
 if ls "$SRC"/applications/*.desktop >/dev/null 2>&1; then
     mkdir -p "$DEST/applications"
     for entry in "$SRC"/applications/*.desktop; do
         app="$(app_for "$entry")"
         { [ -n "$app" ] && [ -d "$DEST/$app" ]; } || continue
-        sed "s|@EXEC@|$DEST/$app/main.py|" "$entry" > "$DEST/applications/$(basename "$entry")"
+        sed "s|@EXEC@|$DEST/$app/main.py|; s|@PYTHON@|$(app_python "$app")|" "$entry" \
+            > "$DEST/applications/$(basename "$entry")"
         ITEMS+=("applications/$(basename "$entry")")
     done
     command -v update-desktop-database >/dev/null && \
@@ -471,8 +628,9 @@ for unit in "$SRC"/systemd/user/*.service; do
     app="$(app_for "$unit")"
     { [ -n "$app" ] && [ -d "$DEST/$app" ]; } || continue
     mkdir -p "$CONF/systemd/user"
-    sed "s|@EXEC@|$DEST/$app/main.py|" "$unit" > "$CONF/systemd/user/$(basename "$unit")"
-    echo "  + ~/.config/systemd/user/$(basename "$unit") (used once you run ./install.sh --dock)"
+    sed "s|@EXEC@|$DEST/$app/main.py|; s|@PYTHON@|$(app_python "$app")|" "$unit" \
+        > "$CONF/systemd/user/$(basename "$unit")"
+    echo "  + ~/.config/systemd/user/$(basename "$unit") (used once you run ./install.sh --dock or --bar)"
 done
 
 # What we installed, for ./uninstall.sh --remove
@@ -487,6 +645,9 @@ command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 >/dev/null 2>&1 || true
 
 if [ $DOCK = 0 ] && [ $DOCK_REVERT = 0 ]; then
     dock_refresh
+fi
+if [ $BAR = 0 ] && [ $BAR_REVERT = 0 ]; then
+    bar_refresh
 fi
 if [ -z "$APPLY" ] && [ $EXTRAS = 1 ]; then
     # just the extras, for the variant already in use
@@ -503,16 +664,18 @@ if [ -z "$APPLY" ] && [ $EXTRAS = 1 ]; then
     echo "Backed up what changes to $BACKUP"
     apply_extras "$VARIANT" "$PROFILE"
 fi
-if [ -z "$APPLY" ] && { [ $PANELS = 1 ] || [ $DOCK = 1 ] || [ $DOCK_REVERT = 1 ]; }; then
+if [ -z "$APPLY" ] && [ $SWITCHES = 1 ]; then
     if [ $PANELS = 1 ]; then panels_update; fi
     if [ $DOCK_REVERT = 1 ]; then dock_revert; fi
     if [ $DOCK = 1 ]; then dock_enable; fi
+    if [ $BAR_REVERT = 1 ]; then bar_revert; fi
+    if [ $BAR = 1 ]; then bar_enable; fi
 fi
 if [ -z "$APPLY" ]; then
     echo
     if [ $EXTRAS = 1 ]; then
         echo "Done. To undo:  ./uninstall.sh --restore \"$BACKUP\""
-    elif [ $PANELS = 1 ] || [ $DOCK = 1 ] || [ $DOCK_REVERT = 1 ]; then
+    elif [ $SWITCHES = 1 ]; then
         echo "Done."
     else
         echo "Done. Pick '$TITLE_DARK' or '$TITLE_LIGHT' in"
@@ -570,6 +733,12 @@ if [ $DOCK_REVERT = 1 ]; then
 fi
 if [ $DOCK = 1 ]; then
     dock_enable
+fi
+if [ $BAR_REVERT = 1 ]; then
+    bar_revert
+fi
+if [ $BAR = 1 ]; then
+    bar_enable
 fi
 if ! fc-list | grep -qi "Inter" || ! fc-list | grep -qi "JetBrains Mono"; then
     echo

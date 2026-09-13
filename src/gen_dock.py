@@ -112,11 +112,20 @@ def bridge(out_root):
     return dest
 
 
+def copy_shellkit(app):
+    """The code the dock, the bar and Tweaks share, beside each app's own."""
+    kit = os.path.join(HERE, "shellkit")
+    for name in sorted(os.listdir(kit)):
+        if name.endswith((".py", ".qml")):
+            shutil.copy(os.path.join(kit, name), os.path.join(app, name))
+
+
 def build(out_root):
     app = os.path.join(out_root, IDS["dockexe"])
     shutil.rmtree(app, ignore_errors=True)
     shutil.copytree(os.path.join(HERE, "dock"), app,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    copy_shellkit(app)
     with open(os.path.join(app, "ids.py"), "w") as f:
         f.write(ids_py())
     os.chmod(os.path.join(app, "main.py"), 0o755)

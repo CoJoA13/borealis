@@ -103,7 +103,8 @@ QtObject {
         run("bluetoothctl power " + (btOn ? "off" : "on"));
     }
     function toggleNight() {
-        run("kwriteconfig6 --file kwinrc --group NightColor --key Active " + (nightOn ? "false" : "true")
+        // --notify: night light only follows its settings file's change notifications
+        run("kwriteconfig6 --notify --file kwinrc --group NightColor --key Active " + (nightOn ? "false" : "true")
             + "; qdbus-qt6 org.kde.KWin /KWin org.kde.KWin.reconfigure");
     }
     function cycleProfile() {
