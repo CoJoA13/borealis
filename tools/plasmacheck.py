@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Put the Borealis Tweaks Plasma pages' backends through their changes without
-touching the session.
+"""Put the Borealis Tweaks Plasma pages' backends, and the desktop presets that
+drive them, through their changes without touching the session.
 
     python3 tools/plasmacheck.py
 
@@ -8,12 +8,14 @@ Each change is written into a throwaway config folder (kwriteconfig6 runs
 for real, minus --notify) and read back the way Plasma reads it; the D-Bus
 calls and signals a page would send (busctl, dbus-send) and the pointer
 theme tool are written down instead of run, and what the pages would ask
-KWin and kglobalaccel for comes from stand-ins. No session bus is reachable
-from here at all.
+KWin and kglobalaccel for comes from stand-ins. Long jobs (a theme switch, a
+rebuild) are written down too, and finished by hand. No session bus is
+reachable from here at all; the one real theme switch runs on a private bus.
 """
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -29,7 +31,14 @@ os.environ.update(QT_QPA_PLATFORM="offscreen", XDG_CONFIG_HOME=os.path.join(home
                   XDG_DATA_HOME=os.path.join(home, "data"), XDG_STATE_HOME=os.path.join(home, "state"),
                   XDG_CACHE_HOME=os.path.join(home, "cache"),
                   XDG_CONFIG_DIRS=os.path.join(home, "config", "kdedefaults") + ":" + os.path.join(home, "etc"))
-os.environ.pop("DBUS_SESSION_BUS_ADDRESS", None)     # so nothing can slip through to the real session
+# so nothing can slip through to the real session: no bus address, no runtime
+# folder where the bus socket lives, no display
+os.environ.pop("DBUS_SESSION_BUS_ADDRESS", None)
+os.makedirs(os.path.join(home, "run"))
+os.chmod(os.path.join(home, "run"), 0o700)
+os.environ["XDG_RUNTIME_DIR"] = os.path.join(home, "run")
+for _name in ("DISPLAY", "WAYLAND_DISPLAY"):
+    os.environ.pop(_name, None)
 sys.path.insert(0, TWEAKS)
 
 FONTS_CONF = """<?xml version='1.0'?>
@@ -284,7 +293,183 @@ check("a single click opens files", conf("kdeglobals", "KDE", "SingleClick") == 
 d.resetCorners()
 check("resetting the corners goes back to KWin's", d.values["topLeft"] == "overview" and d.values["topRight"] == "none")
 
-del w, t, i, d
+# --------------------------------------------------------------- presets ---
+import lookandfeel  # noqa: E402  (backend put shellkit on the path)
+import desktoppresets as desk  # noqa: E402
+from barpage import BarBackend  # noqa: E402
+from dockpage import DockBackend  # noqa: E402
+from presetspage import PresetsBackend, undo_dir  # noqa: E402
+
+w.resetEffects()
+apply(d, singleClick=False)
+sent.clear()
+jobs, job_log = [], []          # started and not yet finished; everything started
+_backend_run = tweaks_backend.run
+
+
+def fake_backend_run(cmd, **kw):
+    if cmd and cmd[0] in ("kreadconfig6", "kwriteconfig6"):
+        return _backend_run([a for a in cmd if a != "--notify"], **kw)
+    sent.append([str(a) for a in cmd])
+    return subprocess.CompletedProcess(cmd, 1, "", "")
+
+
+def fake_quiet(argv):
+    fake_run(argv)
+    return 0
+
+
+def fake_job(steps, done_msg, on_success=None):
+    argvs = [[str(a) for a in cmd] for _label, cmd in steps]
+    jobs.append((argvs, on_success, done_msg))
+    job_log.extend(argvs)
+    backend._set_busy(True)
+
+
+def finish_jobs():
+    """Each job ends as the real one would; a rebuilt decoration gets its new corners."""
+    while jobs:
+        argvs, on_success, message = jobs.pop(0)
+        for argv in argvs:
+            if "aurorae" in argv and "--window-radius" in argv:
+                radius = argv[argv.index("--window-radius") + 1]
+                for rc in glob.glob(os.path.join(os.environ["XDG_DATA_HOME"], "aurorae", "themes", "*", "*rc")):
+                    text = re.sub(r"^CornerRadius=\d+", f"CornerRadius={radius}", open(rc).read(), flags=re.M)
+                    with open(rc, "w") as f:
+                        f.write(text)
+        if on_success:
+            on_success()
+        backend._set_busy(False)
+        backend.finished.emit(True, message)
+
+
+def started(*words):
+    """Whether a job step contained these words in a row."""
+    n = len(words)
+    return any(list(words) == argv[k:k + n] for argv in job_log for k in range(len(argv) - n + 1))
+
+
+tweaks_backend.run, lookandfeel._quiet, backend._job = fake_backend_run, fake_quiet, fake_job
+config_home = os.environ["XDG_CONFIG_HOME"]
+slug = dockpage.ids.SLUG
+
+
+def settings_file(name):
+    return json.load(open(os.path.join(config_home, slug, name)))
+
+
+dock, bar = DockBackend(backend, app), BarBackend(backend, app)
+w2, d2 = WindowsBackend(backend, app), DesktopBackend(backend, app)
+pb = PresetsBackend(backend, dock, bar, w2, d2, app)
+listed = {p["id"]: p for p in pb.presets}
+check("the built-in presets are listed", list(listed)[:3] == ["borealis", "maclike", "minimal"], str(list(listed)))
+check("8 px window corners keep the Borealis preset from counting as in use",
+      not listed["borealis"]["current"] and listed["borealis"]["thumb"]["dockSize"] == 48)
+
+pb.apply("maclike", listed["maclike"]["sections"], False)
+check("the corners wait for their rebuild, which starts at once", started("--window-radius", "12") and len(jobs) == 1)
+finish_jobs()
+dock_json, bar_json = settings_file("dock.json"), settings_file("bar.json")
+check("Mac-like: the dock grows and magnifies more", dock_json["iconSize"] == 54 and dock_json["zoom"] == 2.2)
+check("Mac-like: a flush bar with the clock at the right", bar_json["floating"] is False and bar_json["center"] == []
+      and bar_json["right"] == ["tray", "drives", "controls", "clock"], str(bar_json)[:300])
+check("Mac-like: its toggles, and what's this machine's stays", bar_json["pills"][:3] == ["wifi", "bluetooth", "dnd"]
+      and bar_json["batteryPercent"] is False and bar_json["screen"] == "all")
+check("Mac-like: close at the left", conf("kwinrc", "org.kde.kdecoration2", "ButtonsOnLeft") == "XIA"
+      and conf("kwinrc", "org.kde.kdecoration2", "ButtonsOnRight") == "")
+check("Mac-like: no hot corner", conf("kwinrc", "ElectricBorders", "TopLeft") == "None"
+      and conf("kwinrc", "Effect-overview", "BorderActivate") == "")
+check("the preset counts as in use afterwards", next(p for p in pb.presets if p["id"] == "maclike")["current"])
+check("Undo is offered", pb.canUndo and pb.lastApplied == "Mac-like")
+
+pb.undo()
+finish_jobs()
+check("Undo puts the dock back", settings_file("dock.json")["iconSize"] == 48)
+check("Undo puts the title bar and corners back", conf("kwinrc", "org.kde.kdecoration2", "ButtonsOnLeft") == "M"
+      and conf("kwinrc", "org.kde.kdecoration2", "ButtonsOnRight") == "IAX"
+      and conf("kwinrc", "Effect-overview", "BorderActivate") == "7" and started("--window-radius", "8"))
+check("the desktop from before is also kept as a file", bool(glob.glob(os.path.join(undo_dir(), "*.json"))))
+
+ember_file = os.path.join(home, "ember.json")
+with open(ember_file, "w") as f:
+    json.dump({"format": "borealis-desktop-preset", "version": 1, "name": "Ember evening",
+               "theme": {"variant": "light", "accent": "#FF8A5B", "name": "Ember"},
+               "windows": {"buttonsSide": "left"}}, f)
+ember = pb.importPreset(ember_file)
+check("a preset file is imported", ember.startswith("user:"), ember)
+check("its palette is cleaned up", desk.find(ember)["sections"]["theme"]
+      == {"variant": "light", "accent": "#ff8a5b", "name": "Borealis Ember"}, str(desk.find(ember)))
+entry = next(p for p in pb.presets if p["id"] == ember)
+check("the page knows it means a rebuild and a switch to Light", entry["remix"] and entry["variantChanges"])
+apply(t, cursorTheme="Adwaita")         # a pointer of your own (one equal to the theme's isn't written at all)
+sent.clear()
+job_log.clear()
+pb.apply(ember, ["theme", "windows"], True)
+check("the palette is rebuilt with the corners in use, and applied as Light",
+      started("--accent", "#ff8a5b", "--name", "Borealis Ember") and started("--window-radius", "8")
+      and started("--apply", "light"))
+check("the title bar waits for the theme", conf("kwinrc", "org.kde.kdecoration2", "ButtonsOnLeft") == "M")
+finish_jobs()
+check("then the title bar follows", conf("kwinrc", "org.kde.kdecoration2", "ButtonsOnLeft") == "XIA")
+check("the new palette is remembered", backend.accent == "#ff8a5b" and backend.paletteName == "Borealis Ember")
+check("and the pointer theme you chose is put back after the rebuild",
+      did("plasma-apply-cursortheme", "Adwaita", "--size", "36") and conf("kcminputrc", "Mouse", "cursorTheme") == "Adwaita")
+job_log.clear()
+pb.apply(ember, ["theme"], False)
+check("without a rebuild, only the switch to Light runs, keeping your fonts and pointer",
+      started(sys.executable, lookandfeel.__file__, "Borealis-Light") and not started("--accent"))
+finish_jobs()
+
+pb.savePreset("My desk", True)
+saved = json.load(open(os.path.join(desk.presets_dir(), "my-desk.json")))
+check("saving keeps every part, the dock's apps too", saved["format"] == desk.FORMAT
+      and {"theme", "dock", "bar", "controls", "windows", "desktop", "dockApps"} <= set(saved))
+exported = pb.exportPreset("file://" + os.path.join(home, "shared"), False)
+check("exporting writes a file, without the apps", exported.endswith("shared.json")
+      and "dockApps" not in json.load(open(exported)) and "theme" in json.load(open(exported)))
+with open(os.path.join(home, "dock.json"), "w") as f:
+    json.dump({"format": "borealis-dock-preset", "version": 1, "settings": {}}, f)
+check("a dock preset isn't taken for a desktop preset",
+      pb.importPreset(os.path.join(home, "dock.json")) == "error:not a desktop preset")
+odd = desk.parse(json.dumps({"format": "borealis-desktop-preset", "name": "Odd",
+                             "windows": {"blurStrength": 99, "buttonsSide": "up", "close": "yes"},
+                             "theme": {"accent": "red", "variant": "dusk"}, "desktop": {"topLeft": "explode"}}))
+check("odd values in a shared file are cleaned", odd["sections"]["windows"]["blurStrength"] == 15
+      and odd["sections"]["windows"]["buttonsSide"] == "right" and odd["sections"]["windows"]["close"] is True
+      and "theme" not in odd["sections"] and odd["sections"]["desktop"]["topLeft"] == "overview", str(odd))
+check("a palette can't pose as another theme", desk.palette_name("Breeze") == "Borealis Breeze"
+      and desk.palette_name("Borealis Ember") == "Borealis Ember" and desk.palette_name("../x") == "Borealis x")
+
+# ------------------------------------------------- a real theme switch ---
+built_light = os.path.join(HERE, "build", "share", "plasma", "look-and-feel", "Borealis-Light")
+if shutil.which("lookandfeeltool") and shutil.which("dbus-run-session") and os.path.isdir(built_light):
+    lnf = os.path.join(home, "lnf")
+    for sub in ("config/kdedefaults", "home", "state", "cache", "run"):
+        os.makedirs(os.path.join(lnf, sub), mode=0o700)
+    with open(os.path.join(lnf, "config", "kdeglobals"), "w") as f:
+        f.write("[KDE]\nLookAndFeelPackage=Borealis-Dark\n\n[General]\n"
+                "font=DejaVu Serif,12,-1,5,400,0,0,0,0,0,0,0,0,0,0,1\n")
+    with open(os.path.join(lnf, "config", "kcminputrc"), "w") as f:
+        f.write("[Mouse]\ncursorSize=36\ncursorTheme=Adwaita\n")
+    env = {"HOME": os.path.join(lnf, "home"), "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8",
+           "XDG_CONFIG_HOME": os.path.join(lnf, "config"),
+           "XDG_CONFIG_DIRS": os.path.join(lnf, "config", "kdedefaults") + ":/etc/xdg",
+           "XDG_DATA_HOME": os.path.join(HERE, "build", "share"), "XDG_DATA_DIRS": "/usr/local/share:/usr/share",
+           "XDG_STATE_HOME": os.path.join(lnf, "state"), "XDG_CACHE_HOME": os.path.join(lnf, "cache"),
+           "XDG_RUNTIME_DIR": os.path.join(lnf, "run"), "QT_QPA_PLATFORM": "offscreen"}
+    # into a file, not a pipe: a service the bus starts could hold a pipe open
+    with open(os.path.join(lnf, "out.log"), "w") as log:
+        status = subprocess.run(["dbus-run-session", "--", sys.executable,
+                                 os.path.join(HERE, "src", "shellkit", "lookandfeel.py"), "Borealis-Light"],
+                                env=env, stdout=log, stderr=subprocess.STDOUT, timeout=180).returncode
+    after, mouse = ps.read_text(os.path.join(lnf, "config", "kdeglobals")), ps.read_text(os.path.join(lnf, "config", "kcminputrc"))
+    check("a real switch to Light keeps your own font and pointer", status == 0
+          and "LookAndFeelPackage=Borealis-Light" in after and "font=DejaVu Serif,12" in after
+          and "cursorTheme=Adwaita" in mouse, ps.read_text(os.path.join(lnf, "out.log"))[-400:])
+else:
+    print("skipped: a real theme switch (needs lookandfeeltool, dbus-run-session and ./build.py lnf)")
+
+del w, t, i, d, w2, d2, pb, dock, bar
 shutil.rmtree(home, ignore_errors=True)
 print("all good" if not failures else f"{failures} failed")
 sys.exit(1 if failures else 0)

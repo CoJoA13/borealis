@@ -29,7 +29,12 @@ Keywords=theme;colour;color;accent;wallpaper;aurora;{NAME};
 StartupNotify=true
 X-KDE-StartupNotify=true
 X-Borealis-App={SLUG.lower()}-tweaks
-Actions=dock;system;
+Actions=presets;dock;system;welcome;
+
+[Desktop Action presets]
+Name=Desktop Presets
+Icon=bookmarks
+Exec=@EXEC@ --page presets
 
 [Desktop Action dock]
 Name=Dock Settings
@@ -40,6 +45,11 @@ Exec=@EXEC@ --page dock
 Name=Login, Boot and Apps
 Icon=preferences-system
 Exec=@EXEC@ --page system
+
+[Desktop Action welcome]
+Name=Welcome Tour
+Icon=go-home
+Exec=@EXEC@ --welcome
 """
 
 

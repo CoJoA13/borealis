@@ -194,6 +194,11 @@ Kirigami.ScrollablePage {
                 icon.name: "preferences-desktop-color"
                 onClicked: backend.launch("colors")
             }
+            QQC2.Button {
+                text: qsTr("Welcome tour")
+                icon.name: "go-home"
+                onClicked: applicationWindow().showPage("welcome")
+            }
         }
 
         JobLog {}

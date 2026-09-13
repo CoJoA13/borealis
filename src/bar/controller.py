@@ -4,11 +4,13 @@ import os
 import re
 import shlex
 import signal
+import sys
 
 from PySide6.QtCore import Property, QObject, QProcess, QRectF, QStandardPaths, QTimer, Signal, Slot
 from PySide6.QtDBus import QDBus, QDBusConnection, QDBusMessage
 
 import ids
+import lookandfeel
 from settings import PILLS
 from surfaces import Surfaces
 
@@ -367,7 +369,8 @@ class Controller(QObject):
     def toggleDarkStyle(self):
         self._toggles["dark"] = not self._toggles["dark"]
         self.togglesChanged.emit()
-        self._run("plasma-apply-lookandfeel", ["-a", ids.LNF_DARK if self._toggles["dark"] else ids.LNF_LIGHT])
+        # shellkit's lookandfeel.py applies the Global Theme and keeps your own fonts and pointer
+        self._run(sys.executable, [lookandfeel.__file__, ids.LNF_DARK if self._toggles["dark"] else ids.LNF_LIGHT])
 
     @Slot()
     def toggleAurora(self):

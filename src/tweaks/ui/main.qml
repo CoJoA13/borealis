@@ -1,6 +1,7 @@
 /*
-    Borealis Tweaks — one place for the whole Borealis desktop: the theme and
-    its palette, the dock, and everything beyond Plasma, with undo.
+    Borealis Tweaks — one place for the whole Borealis desktop: a welcome tour,
+    presets for all of it at once, the theme and its palette, the bar and dock,
+    Plasma's own settings, and everything beyond Plasma, with undo.
     SPDX-License-Identifier: GPL-3.0-or-later
 */
 
@@ -25,6 +26,8 @@ Kirigami.ApplicationWindow {
     property string jobLog: ""
 
     readonly property var pageComponents: ({
+        welcome: welcomePage,
+        presets: presetsPage,
         theme: themePage,
         bar: barPage,
         controls: controlsPage,
@@ -63,6 +66,20 @@ Kirigami.ApplicationWindow {
         collapseButtonVisible: false
 
         actions: [
+            Kirigami.Action {
+                text: qsTr("Welcome")
+                icon.name: "go-home"
+                checkable: true
+                checked: root.page === "welcome"
+                onTriggered: root.showPage("welcome")
+            },
+            Kirigami.Action {
+                text: qsTr("Presets")
+                icon.name: "bookmarks"
+                checkable: true
+                checked: root.page === "presets"
+                onTriggered: root.showPage("presets")
+            },
             Kirigami.Action {
                 text: qsTr("Theme")
                 icon.name: "preferences-desktop-theme-global"
@@ -137,6 +154,16 @@ Kirigami.ApplicationWindow {
         function onFinished(ok, message) {
             root.showPassiveNotification(message, ok ? 6000 : 12000);
         }
+    }
+
+    Component {
+        id: welcomePage
+        WelcomePage {}
+    }
+
+    Component {
+        id: presetsPage
+        PresetsPage {}
     }
 
     Component {

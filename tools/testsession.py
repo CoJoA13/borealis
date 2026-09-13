@@ -485,6 +485,41 @@ print(rows[1] if len(rows) > 1 else "")' "$SANDBOX/sdock-two-windows.json")
     stop "$SDPID" "$S1" "$S2"
     sleep 1
 fi
+if [ "$PRESETS" = 1 ]; then
+    # whole-desktop presets through Borealis Tweaks' own backends, with the dock
+    # and the bar running to show them; a switch to Light that keeps a font of
+    # your own; then Tweaks as it first opens, on the welcome tour
+    plog="$SANDBOX/presets-steps.log"
+    preset() { echo "--- $*" >> "$plog"; python3 "$SANDBOX/preset_set.py" "$@" >> "$plog" 2>&1; }
+    dolphin --new-window "$HOME" >/dev/null 2>&1 &
+    P1=$!
+    sleep 3
+    "$XDG_DATA_HOME"/*-dock/main.py > "$SANDBOX/sdock.log" 2>&1 &
+    P2=$!
+    QT_FORCE_STDERR_LOGGING=1 "$BAR_PYTHON" "$BAR_APP/main.py" > "$SANDBOX/bar.log" 2>&1 &
+    P3=$!
+    sleep 9
+    shot presets-0-borealis
+    preset apply maclike
+    sleep 3; shot presets-1-maclike
+    preset apply minimal
+    sleep 3; shot presets-2-minimal
+    preset undo
+    sleep 3; shot presets-3-undo
+    python3 "$SANDBOX/plasma_set.py" text 'font={"family":"Noto Serif","size":11}' >> "$plog" 2>&1
+    preset variant light
+    sleep 4
+    echo "after the switch: $(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage)," \
+        "font $(kreadconfig6 --file kdeglobals --group General --key font)" >> "$plog"
+    shot presets-4-light
+    preset apply borealis
+    "$XDG_DATA_HOME"/*-tweaks/main.py > "$SANDBOX/tweaks.log" 2>&1 &
+    P4=$!
+    sleep 9
+    shot presets-5-welcome
+    stop "$P4" "$P3" "$P2" "$P1"
+    sleep 1
+fi
 if [ "$PLASMA" = 1 ]; then
     # Borealis Tweaks' Plasma pages, driven through their own backends against
     # this session's KWin and config: title bar, corners, fonts, pointer,
@@ -834,6 +869,47 @@ spin(1.5)
 print(sys.argv[1], json.dumps({k: v for k, v in page.values.items() if k != "shortcuts"}, default=str)[:900])
 """
 
+PRESET_SET = r"""# Borealis Tweaks' desktop presets, driven from its own backends:
+#   preset_set.py apply ID | undo | variant dark|light|auto
+import glob, json, os, sys, time
+app_dir = next(iter(glob.glob(os.path.join(os.environ["XDG_DATA_HOME"], "*-tweaks"))), "")
+sys.path.insert(0, app_dir)
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
+from PySide6.QtGui import QGuiApplication
+app = QGuiApplication(["preset-set"])
+import main as tweaks
+import desktoppresets
+import presetspage
+
+objects = tweaks.context(app)
+backend, presets = objects["backend"], objects["presetsSettings"]
+backend.logged.connect(lambda line: print("   ", line))
+
+
+def spin(seconds):
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        app.processEvents()
+        time.sleep(0.02)
+
+
+if sys.argv[1] == "apply":
+    wanted = next(p for p in presets.presets if p["id"] == sys.argv[2])
+    presets.apply(wanted["id"], wanted["sections"], False)
+elif sys.argv[1] == "undo":
+    # the desktop from before the last preset, as the page wrote it down
+    before = desktoppresets.read(sorted(glob.glob(os.path.join(presetspage.undo_dir(), "*.json")))[-1])
+    presets._run(before, list(before["sections"]) + (["dockApps"] if before["dockApps"] else []), True)
+elif sys.argv[1] == "variant":
+    backend.setVariant(sys.argv[2])
+spin(0.5)
+end = time.monotonic() + 150
+while (backend.busy or presets._queue) and time.monotonic() < end:
+    spin(0.2)
+spin(1.5)
+print("in use:", json.dumps({p["id"]: p["current"] for p in presets.presets}))
+"""
+
 MPRIS_FAKE = r"""import sys
 from PySide6.QtCore import ClassInfo, Property, QCoreApplication, QObject, QTimer, Slot
 from PySide6.QtDBus import QDBusAbstractAdaptor, QDBusConnection, QDBusMessage
@@ -1080,6 +1156,9 @@ def main():
                     help="drive Borealis Tweaks' Plasma pages (title bar, corners, fonts, desktops, night light)")
     ap.add_argument("--bar", action="store_true",
                     help="run the standalone bar (menus, tray, notifications, Control Center, drives)")
+    ap.add_argument("--presets", action="store_true",
+                    help="apply desktop presets through Borealis Tweaks with the dock and bar running, "
+                         "switch to Light, then open Tweaks on its welcome tour")
     ap.add_argument("--remix", metavar="HEX", default="",
                     help="also remix onto this accent through the app's backend, e.g. '#4fbf6a'")
     args = ap.parse_args()
@@ -1124,7 +1203,7 @@ def main():
         # sandbox only: let the nested Xwayland's XTest input through unprompted
         kwinrc += "[Xwayland]\nXwaylandEisNoPrompt=true\n\n"
     sdock_bus = sdock_slug = sdock_launchpad = ""
-    if args.standalone_dock:
+    if args.standalone_dock or args.presets:
         import glob
         import re
         bridge = next(iter(glob.glob(os.path.join(SHARE, "kwin", "scripts", "*-dockbridge"))), "")
@@ -1144,6 +1223,16 @@ def main():
         os.chmod(os.path.join(fakebin, "systemd-run"), 0o755)
     bar_bus = bar_app = bar_python = ""
     if args.bar:
+        import glob
+        # the bar's run starts kded6 for the tray watcher and the menu registrar:
+        # just those two modules, so nothing else in it (Bluetooth and network
+        # agents, printers, drives) reaches the real system bus
+        with open(os.path.join(sandbox, "config", "kded6rc"), "w") as f:
+            for module in sorted(glob.glob("/usr/lib*/qt6/plugins/kf6/kded/*.so")):
+                name = os.path.basename(module)[:-3]
+                if name not in ("appmenu", "statusnotifierwatcher"):
+                    f.write(f"[Module-{name}]\nautoload=false\n\n")
+    if args.bar or args.presets:
         import glob
         import re
         bar_app = next(iter(glob.glob(os.path.join(data, "*-bar"))), "")
@@ -1204,6 +1293,8 @@ def main():
         f.write(TAP_KEY)
     with open(os.path.join(sandbox, "plasma_set.py"), "w") as f:
         f.write(PLASMA_SET)
+    with open(os.path.join(sandbox, "preset_set.py"), "w") as f:
+        f.write(PRESET_SET)
     with open(os.path.join(sandbox, "mpris_fake.py"), "w") as f:
         f.write(MPRIS_FAKE)
     import glob as _glob
@@ -1257,10 +1348,12 @@ def main():
         "SDOCK_LAUNCHPAD": sdock_launchpad,
         "BAR": "1" if args.bar else "0", "BAR_BUS": bar_bus, "BAR_APP": bar_app, "BAR_PYTHON": bar_python,
         "PLASMA": "1" if args.plasma else "0",
+        "PRESETS": "1" if args.presets else "0",
         "SCREEN_W": w, "SCREEN_H": h,
     }
     # the standalone dock's and bar's runs walk through every feature, and take a while
-    cmd = ["timeout", str(120 + 210 * args.standalone_dock + 170 * args.bar + 120 * args.plasma), "dbus-run-session", "--",
+    cmd = ["timeout", str(120 + 210 * args.standalone_dock + 170 * args.bar + 120 * args.plasma + 200 * args.presets),
+           "dbus-run-session", "--",
            "kwin_wayland", "--virtual", "--no-lockscreen",
            "--width", w, "--height", h,
            "--socket", f"wayland-borealis-{os.getpid()}"]

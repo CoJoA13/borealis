@@ -9,12 +9,20 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
-CONF = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+HERE = os.path.dirname(os.path.abspath(__file__))
+try:                        # installed: shellkit's modules are copied beside the app's
+    import lookandfeel
+except ImportError:         # the source tree
+    sys.path.insert(1, os.path.join(HERE, "..", "shellkit"))
+    import lookandfeel
+
+CONF =os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
 DATA = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
 STATE = os.path.join(CONF, "borealis", "tweaks.json")
 def _project():
@@ -86,6 +94,18 @@ def read_text(path):
             return f.read()
     except OSError:
         return ""
+
+
+def decoration_radius():
+    """The corner radius the Borealis window decoration in use was built with, or None."""
+    theme = kread("kwinrc", "org.kde.kdecoration2", "theme")
+    prefix = "__aurorae__svg__"
+    if not theme.startswith(prefix):
+        return None
+    name = theme[len(prefix):]
+    m = re.search(r"^CornerRadius=(\d+)\s*$", read_text(os.path.join(DATA, "aurorae", "themes", name, f"{name}rc")),
+                  re.M)
+    return int(m.group(1)) if m else None
 
 
 def firefox_profile():
@@ -171,6 +191,17 @@ class Backend(QObject):
     @Property(str, notify=changed)
     def paletteName(self):
         return self._state.get("name", "Borealis")
+
+    @Property(bool, notify=changed)
+    def welcomed(self):
+        """Whether the welcome tour has been shown."""
+        return bool(self._state.get("welcomed"))
+
+    def _save_state(self):
+        os.makedirs(os.path.dirname(STATE), exist_ok=True)
+        with open(STATE + ".tmp", "w") as f:
+            json.dump(self._state, f, indent=2)
+        os.replace(STATE + ".tmp", STATE)
 
     def _wallpaper_plugins(self):
         """What the desktops actually use: ask plasmashell, fall back to config.
@@ -331,9 +362,19 @@ class Backend(QObject):
             kwrite("kdeglobals", "KDE", "AutomaticLookAndFeel", "false")
             target = f"{base}-{'Light' if variant == 'light' else 'Dark'}"
             extra = []
+        # shellkit's lookandfeel.py: lookandfeeltool, keeping your own fonts and pointer
         self._job([(f"lookandfeeltool --apply {target}",
-                    ["lookandfeeltool", "--apply", target] + extra)],
+                    [sys.executable, lookandfeel.__file__, target] + extra)],
                   f"Switched to {target.replace('-', ' ')}.")
+
+    @Slot()
+    def setWelcomed(self):
+        if not self._state.get("welcomed"):
+            self._state["welcomed"] = True
+            try:
+                self._save_state()
+            except OSError:
+                pass
 
     @Slot(bool)
     def setLiveWallpaper(self, on):
@@ -370,6 +411,10 @@ class Backend(QObject):
     @Slot(str, str, bool, bool)
     def remix(self, accent, name, gtk, terminal):
         """Rebuild the whole theme on a new accent and apply it."""
+        self.remix_to(accent, name, gtk, terminal, self.variant)
+
+    def remix_to(self, accent, name, gtk, terminal, variant):
+        """A remix applied as Dark, Light or day and night ("auto")."""
         out = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
                            "borealis", "remix", "share")
         build = ["python3", os.path.join(PROJECT, "build.py"), "--out", out]
@@ -377,17 +422,26 @@ class Backend(QObject):
             build += ["--accent", accent, "--name", name]
         elif accent.lower() != "#8b9cff":
             build += ["--accent", accent]
+        radius = decoration_radius()
+        if radius is not None:
+            build += ["--window-radius", str(radius)]      # the corners set on the Windows page stay
         apply_cmd = [os.path.join(PROJECT, "install.sh"), "--from", out,
-                     "--apply", "light" if self.variant == "light" else "dark"]
+                     "--apply", "light" if variant == "light" else "dark"]
+        if variant == "auto":
+            apply_cmd.append("--auto")
         if gtk:
             apply_cmd.append("--gtk")
         if terminal:
             apply_cmd.append("--terminal")
+        # install.sh applies the Global Theme afresh, fonts and pointer included
+        kept = lookandfeel.own_values()
+
         def remember():
+            if kept:
+                lookandfeel.restore(kept)
             self._state.update({"accent": accent, "name": name,
                                 "live_id": "org." + "".join(name.split()).lower() + ".aurora"})
-            os.makedirs(os.path.dirname(STATE), exist_ok=True)
-            json.dump(self._state, open(STATE, "w"), indent=2)
+            self._save_state()
 
         self._job([("building " + name, build), ("installing", apply_cmd)],
                   f"{name} is on. Your old settings are in ~/.local/state/borealis-backup.",

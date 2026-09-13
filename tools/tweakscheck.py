@@ -35,9 +35,6 @@ messages = []
 qInstallMessageHandler(lambda kind, context, text: messages.append(text))
 app = QGuiApplication(["tweakscheck"])
 
-from backend import Backend  # noqa: E402
-from dockpage import DockBackend  # noqa: E402
-from barpage import BarBackend  # noqa: E402
 import main as tweaks_main  # noqa: E402
 
 
@@ -79,15 +76,9 @@ def main():
     keep = "--keep" in sys.argv
     os.makedirs(SHOTS, exist_ok=True)
     engine = QQmlApplicationEngine()
-    backend = Backend(app)
-    dock = DockBackend(backend, app)
-    bar = BarBackend(backend, app)
     ctx = engine.rootContext()
-    ctx.setContextProperty("backend", backend)
-    ctx.setContextProperty("dockSettings", dock)
-    ctx.setContextProperty("barSettings", bar)
-    for name, plasma_page in tweaks_main.plasma_pages(backend, app).items():
-        ctx.setContextProperty(name, plasma_page)
+    for name, obj in tweaks_main.context(app).items():
+        ctx.setContextProperty(name, obj)
     ctx.setContextProperty("startPage", "theme")
     engine.load(QUrl.fromLocalFile(os.path.join(TWEAKS, "ui", "main.qml")))
     if not engine.rootObjects():
@@ -103,13 +94,20 @@ def main():
         for width in WIDTHS:
             root.setProperty("width", width)
             root.setProperty("height", 2400)
-            spin(1200)
-            found, bad = check_values(window)
-            shot = os.path.join(SHOTS, f"{page}-{width}.png")
-            window.grabWindow().save(shot)
-            status = "ok" if not bad else "FAIL"
-            failures += bool(bad)
-            print(f"{status}: {page} at {width} px — {found} sliders" + ("" if not bad else ": " + "; ".join(bad)))
+            spin(300)
+            # a page in steps (the welcome tour) is checked a step at a time
+            current, steps = next(((item, item.property("stepCount")) for item in items(window.contentItem())
+                                   if isinstance(item.property("stepCount"), int) and item.isVisible()), (None, 0))
+            for step in range(steps) if steps else [None]:
+                if step is not None:
+                    current.setProperty("step", step)
+                spin(1200)
+                found, bad = check_values(window)
+                name = page if step is None else f"{page}-{step + 1}"
+                window.grabWindow().save(os.path.join(SHOTS, f"{name}-{width}.png"))
+                status = "ok" if not bad else "FAIL"
+                failures += bool(bad)
+                print(f"{status}: {name} at {width} px — {found} sliders" + ("" if not bad else ": " + "; ".join(bad)))
     noise = [m for m in dict.fromkeys(messages) if "KLocalized" not in m and "Binding loop" not in m]
     if noise:
         print(f"{len(noise)} QML messages, first ones:")

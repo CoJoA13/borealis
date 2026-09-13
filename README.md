@@ -163,7 +163,7 @@ tools/check.py              # QML, SVG, JSON, package, Plymouth and WCAG checks
 tools/contrast.py           # just the WCAG audit, pair by pair
 tools/tweakscheck.py        # every Borealis Tweaks page, narrow and wide, off-screen
 tools/barcheck.py           # the bar's Control Center, every page and edit mode, with stand-in backends
-tools/plasmacheck.py        # what each Plasma settings page writes, into a throwaway config
+tools/plasmacheck.py        # what each Plasma settings page and desktop preset writes, into a throwaway config
 tools/testsession.py dark   # screenshots from an isolated, off-screen Plasma session
 tools/package.py            # KDE Store archives → dist/ (see STORE.md)
 ```
@@ -324,8 +324,17 @@ and brightness and volume sliders.
 ### Borealis Tweaks (the app)
 
 `install.sh` also installs a small app — look for **Borealis Tweaks** in your
-launcher. Its sidebar has a page for each part of Borealis:
+launcher. The first time it opens, a short **welcome tour** goes through the
+choices that shape the desktop most: Dark, Light or day and night, the accent
+colour, a desktop preset, the dock's size, the Control Center's toggles, and the
+touchpad and Meta key. Each applies as you pick it, and any can be skipped. Its
+sidebar has a page for each part of Borealis:
 
+- **Presets** set the whole desktop at once: the dock, the bar and its Control
+  Center, the title bar, window corners and effects, and the hot corners.
+  Borealis, Mac-like and Minimal are built in; save your own (they keep the
+  theme and its palette too), import and export them as files, and undo the
+  last one. Your apps, fonts, touchpad and shortcuts are never part of a preset.
 - **Theme** switches between Dark, Light and day/night, turns the animated
   aurora on or off, and rebuilds the whole theme around a colour you pick
   (seven presets or a custom colour).
@@ -354,9 +363,18 @@ The Plasma pages write the same settings Plasma's own settings pages do and
 apply them at once; each section's Reset button returns to the Borealis
 defaults. The heavy lifting elsewhere is the same `build.py`, `install.sh` and
 `install-system.sh` used here, so anything it does can be undone from the
-terminal. Open it on a page with `--page windows` (or `theme`, `bar`,
-`controls`, `dock`, `text`, `input`, `desktop`, `system`). It needs PySide6
+terminal. Switching between Dark and Light, here or in the Control Center, keeps
+the fonts and pointer theme you chose yourself, which a Global Theme would
+otherwise put back. Open it on a page with `--page presets` (or `welcome`,
+`theme`, `bar`, `controls`, `dock`, `windows`, `text`, `input`, `desktop`,
+`system`), or on the tour with `--welcome`. It needs PySide6
 (`sudo dnf install python3-pyside6`).
+
+Saved and imported presets are JSON files in `~/.config/borealis/desktop-presets/`
+(format `borealis-desktop-preset`), with a section for each part they set:
+`theme`, `dock`, `dockApps`, `bar`, `controls`, `windows` and `desktop`. A part
+a preset leaves out stays as it is. The desktop from before each preset is also
+written to `~/.local/state/borealis/presets-undo/`.
 
 `--konsole`, `--gtk`, `--flatpak`, `--terminal` and `--firefox` also work
 without `--apply`; they then style the variant you already use:

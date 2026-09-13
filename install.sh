@@ -701,8 +701,8 @@ echo "Backed up your current settings to $BACKUP"
 # --- apply ----------------------------------------------------------------
 KEEP_AUTO=()
 if [ $AUTO = 1 ]; then
-    kwriteconfig6 --file kdeglobals --group KDE --key DefaultLightLookAndFeel Borealis-Light
-    kwriteconfig6 --file kdeglobals --group KDE --key DefaultDarkLookAndFeel Borealis-Dark
+    kwriteconfig6 --file kdeglobals --group KDE --key DefaultLightLookAndFeel "$THEME_LIGHT"
+    kwriteconfig6 --file kdeglobals --group KDE --key DefaultDarkLookAndFeel "$THEME_DARK"
     kwriteconfig6 --file kdeglobals --group KDE --key AutomaticLookAndFeel true
     KEEP_AUTO=(--keep-auto)
 fi
