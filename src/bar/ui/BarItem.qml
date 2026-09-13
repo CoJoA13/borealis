@@ -7,8 +7,11 @@ import QtQuick
 import QtQuick.Layouts
 import "items"
 
+// not "id: item": inside the components below that name would mean the
+// Loader's own `item` property (the loaded button itself), and every button
+// would lose its window
 Loader {
-    id: item
+    id: slot
 
     property string name
     property var window
@@ -17,52 +20,52 @@ Loader {
     Layout.fillHeight: true
     // an item that has nothing to show (no drive plugged in, no menus) says so
     // with `wanted`; binding to its visibility instead would never let it show
-    Layout.preferredWidth: item.item && item.item.wanted !== false ? item.item.implicitWidth : 0
+    Layout.preferredWidth: slot.item && slot.item.wanted !== false ? slot.item.implicitWidth : 0
     sourceComponent: ({
         menu: logo, app: appName, appmenu: titles, clock: clock, tray: tray, drives: drives, controls: controls
-    })[item.name] || null
+    })[slot.name] || null
 
     Component {
         id: logo
         LogoButton {
-            window: item.window
+            window: slot.window
         }
     }
     Component {
         id: appName
         AppName {
-            window: item.window
+            window: slot.window
         }
     }
     Component {
         id: titles
         AppMenuTitles {
-            window: item.window
-            limit: item.limit - item.x
+            window: slot.window
+            limit: slot.limit - slot.x
         }
     }
     Component {
         id: clock
         ClockItem {
-            window: item.window
+            window: slot.window
         }
     }
     Component {
         id: tray
         TrayItems {
-            window: item.window
+            window: slot.window
         }
     }
     Component {
         id: drives
         DrivesItem {
-            window: item.window
+            window: slot.window
         }
     }
     Component {
         id: controls
         ControlsItem {
-            window: item.window
+            window: slot.window
         }
     }
 }

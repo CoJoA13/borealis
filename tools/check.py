@@ -61,6 +61,11 @@ def check_shell():
 # anything about our code, so those import errors are skipped. Everything else
 # (syntax, unknown properties in resolvable types) still fails the check.
 MISSING_MODULE = re.compile(r'module "(org\.kde\.[\w.]+|Qt5Compat[\w.]*)" is not installed')
+# a Loader whose id is one of its own properties: inside the Loader's inline
+# components the name means the property (for `item`, the loaded object
+# itself), so `item.window` quietly reads undefined. It broke every click on
+# the bar once, with no error until a click.
+LOADER_ID_CLASH = re.compile(r"\bLoader\s*\{[^{}]*?\bid:\s*(item|source|sourceComponent|status|active|progress)\b")
 
 
 def check_qml():
@@ -85,6 +90,10 @@ def check_qml():
             if MISSING_MODULE.search(msg):
                 continue        # provided by Plasma at run time
             problems.append(msg)
+        clash = LOADER_ID_CLASH.search(open(f, encoding="utf-8").read())
+        if clash:
+            problems.append(f"{os.path.relpath(f, HERE)}: a Loader with id '{clash.group(1)}' hides its own "
+                            f"'{clash.group(1)}' property from its components; pick another id")
     del engine
     app.processEvents()
     bad("qml", "; ".join(problems)) if problems else ok("qml", f"{len(files)} files compile")

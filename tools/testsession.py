@@ -519,6 +519,23 @@ if [ "$BAR" = 1 ]; then
     for page in wifi bluetooth sound power dnd hotspot screenshot edit; do
         bs Open "controls:$page" >> "$SANDBOX/bar-steps.log"; sleep 1.6; shot "bar-cc-$page"; bs Close; sleep 0.6
     done
+    # a real pointer too: the D-Bus calls above skip the buttons' click
+    # handlers, which once all failed without a test noticing
+    centre() { bs State | python3 -c 'import json, sys
+b = json.load(sys.stdin)["buttons"]; want = sys.argv[1]
+k = next((n for n in b if n == want or (want.endswith(":") and n.startswith(want))), None)
+print("" if k is None else "%d,%d" % (b[k][1] + b[k][3] / 2, b[k][2] + b[k][4] / 2))' "$1"; }
+    popup() { bs State | python3 -c 'import json, sys; print(json.load(sys.stdin)["popup"])'; }
+    for b in clock controls system app: tray:; do
+        xy=$(centre "$b")
+        if [ -z "$xy" ]; then echo "pointer: no $b button" >> "$SANDBOX/bar-steps.log"; continue; fi
+        how=click; [ "$b" = "tray:" ] && how=rclick
+        python3 "$SANDBOX/tap_key.py" "$how:$xy" >> "$SANDBOX/bar-steps.log" 2>&1
+        sleep 1.5
+        echo "pointer: $how on $b -> popup '$(popup)'" >> "$SANDBOX/bar-steps.log"
+        shot "bar-pointer-${b%:}"
+        bs Close; sleep 0.8
+    done
     bs Open tray:0 >> "$SANDBOX/bar-steps.log"; sleep 1.5; shot bar-tray
     bs Trigger Hello >> "$SANDBOX/bar-steps.log"; sleep 1
     bs Open drives >> "$SANDBOX/bar-steps.log"; sleep 1.5; shot bar-drives; bs Close; sleep 0.8
@@ -1006,7 +1023,7 @@ def main():
         with open(os.path.join(sandbox, "config", "gtk-4.0", "gtk.css"), "w") as f:
             f.write(f"@import 'colors.css';\n@import '{name}';\n")
     kwinrc = ""
-    if args.switcher or args.standalone_dock:
+    if args.switcher or args.standalone_dock or args.bar:
         # sandbox only: let the nested Xwayland's XTest input through unprompted
         kwinrc += "[Xwayland]\nXwaylandEisNoPrompt=true\n\n"
     sdock_bus = sdock_slug = sdock_launchpad = ""
@@ -1143,7 +1160,7 @@ def main():
         "SCREEN_W": w, "SCREEN_H": h,
     }
     # the standalone dock's and bar's runs walk through every feature, and take a while
-    cmd = ["timeout", str(120 + 210 * args.standalone_dock + 150 * args.bar), "dbus-run-session", "--",
+    cmd = ["timeout", str(120 + 210 * args.standalone_dock + 170 * args.bar), "dbus-run-session", "--",
            "kwin_wayland", "--virtual", "--no-lockscreen",
            "--width", w, "--height", h,
            "--socket", f"wayland-borealis-{os.getpid()}"]

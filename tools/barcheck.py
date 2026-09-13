@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Render the Borealis Bar's Control Center offscreen with stand-in backends,
-walk its pages and edit mode, and check what each click asks for.
+walk its pages and edit mode, and check what each click asks for; then click
+the bar's own buttons and check they ask for their popups.
 
     python3 tools/barcheck.py            screenshots in build/shots/bar/
     python3 tools/barcheck.py --app DIR  check a built or installed copy instead
@@ -34,7 +35,7 @@ if os.path.isdir(os.path.join(BAR, "..", "shellkit")):
     sys.path.insert(1, os.path.join(BAR, "..", "shellkit"))
 
 from PySide6.QtCore import (Property, QAbstractListModel, QByteArray, QDateTime, QEvent, QModelIndex,  # noqa: E402
-                            QObject, QPointF, QRect, Qt, QUrl, Signal, Slot, qInstallMessageHandler)
+                            QObject, QPointF, QRect, QRectF, Qt, QUrl, Signal, Slot, qInstallMessageHandler)
 from PySide6.QtGui import QColor, QGuiApplication, QImage, QKeyEvent, QMouseEvent, QPainter  # noqa: E402
 from PySide6.QtQml import QQmlComponent, QQmlEngine  # noqa: E402
 from PySide6.QtQuick import QQuickItem, QQuickWindow  # noqa: E402
@@ -443,6 +444,7 @@ class Notices(QObject):
                             notify=changed)
     doNotDisturbUntil = Property(QDateTime, lambda self: self._until, notify=changed)
     doNotDisturbByApp = Property(bool, lambda self: False, constant=True)
+    unread = Property(int, lambda self: 0, constant=True)
 
     @Slot(int)
     def setDoNotDisturb(self, minutes):
@@ -496,8 +498,20 @@ class Media(QObject):
         record("media.playPause")
 
 
+class Windows(QObject):
+    active = Property("QVariantMap", lambda self: {"name": "Kate"}, constant=True)
+
+
+class AppMenu(QObject):
+    titles = Property("QVariantList", lambda self: [{"key": "7", "text": "File"}], constant=True)
+
+
+def screen_name(screen):
+    return screen.property("name") if screen is not None else None
+
+
 class Bar(QObject):
-    """What the Control Center sees as `bar`, minus the bar."""
+    """What the Control Center and the bar's buttons see as `bar`, minus the bar."""
     changed = Signal()
     sessionRequested = Signal(str)
     controlsPageRequested = Signal(str)
@@ -506,9 +520,31 @@ class Bar(QObject):
         super().__init__()
         self._settings = bar_settings.Settings(parent=self)
         self._battery, self._media = Battery(self), Media(self)
+        self._windows, self._appmenu = Windows(self), AppMenu(self)
         self._toggles = {"night": False, "dark": True, "aurora": True, "known": True}
         self.controls = {}
+        self.placed = {}
         self.sessionRequested.connect(lambda action: record("bar.session", action))
+
+    logo = Property(str, lambda self: "start-here-kde-symbolic", constant=True)
+    windows = Property(QObject, lambda self: self._windows, constant=True)
+    appmenu = Property(QObject, lambda self: self._appmenu, constant=True)
+
+    @Slot(str, str, QRectF)
+    def placeButton(self, name, screen, rect):
+        self.placed[name] = screen
+
+    @Slot(str, QObject, float, float, float, float)
+    def openPanel(self, kind, screen, x, y, w, h):
+        record("bar.openPanel", kind, screen_name(screen))
+
+    @Slot(QObject, float, float, float, float)
+    def openSystemMenu(self, screen, x, y, w, h):
+        record("bar.openSystemMenu", screen_name(screen))
+
+    @Slot(str, QObject, float, float, float, float)
+    def openAppMenu(self, key, screen, x, y, w, h):
+        record("bar.openAppMenu", key, screen_name(screen))
 
     settings = Property(QObject, lambda self: self._settings, constant=True)
     battery = Property(QObject, lambda self: self._battery, constant=True)
@@ -709,6 +745,78 @@ Window {
 """
 
 
+# the bar's own buttons, the way BarWindow.qml lays them out
+BUTTONS_HARNESS = """import QtQuick
+import QtQuick.Layouts
+import "%s" as Bar
+
+Window {
+    id: win
+    width: 700
+    height: 40
+    visible: true
+    color: "#1b2030"
+
+    property var targetScreen: Qt.application.screens[0]
+    property var status: fakeStatus
+    property var notices: fakeNotices
+    signal layoutChanged()
+
+    RowLayout {
+        height: 30
+        spacing: 4
+        Bar.BarItem {
+            objectName: "item-menu"
+            name: "menu"
+            window: win
+        }
+        Bar.BarItem {
+            objectName: "item-app"
+            name: "app"
+            window: win
+        }
+        Bar.BarItem {
+            objectName: "item-clock"
+            name: "clock"
+            window: win
+        }
+        Bar.BarItem {
+            objectName: "item-controls"
+            name: "controls"
+            window: win
+        }
+    }
+}
+"""
+
+
+def check_buttons(engine, d):
+    """Clicks on the bar's buttons reach the bar, each with its screen."""
+    component = QQmlComponent(engine)
+    component.setData((BUTTONS_HARNESS % QUrl.fromLocalFile(os.path.join(BAR, "ui")).toString()).encode(),
+                      QUrl.fromLocalFile(os.path.join(config, "buttons.qml")))
+    root = component.create()
+    if root is None:
+        d.check("the bar's buttons load", False, "; ".join(e.toString() for e in component.errors()[:3]))
+        return
+    window = shiboken6.wrapInstance(shiboken6.getCppPointer(root)[0], QQuickWindow)
+    buttons = Driver(window, window.contentItem())
+    spin(600)
+    screen = window.screen().name()
+    for item, expected in (("item-menu", ("bar.openSystemMenu", screen)),
+                           ("item-app", ("bar.openAppMenu", "7", screen)),
+                           ("item-clock", ("bar.openPanel", "clock", screen)),
+                           ("item-controls", ("bar.openPanel", "controls", screen))):
+        found = buttons.find(item)
+        buttons.click(found)
+        d.check(f"a click on the bar's {item[5:]} button opens its popup", d.called(*expected),
+                f"asked for {[c for c in calls if c[0].startswith('bar.open')][-1:]}" if found else "no button")
+    d.check("the buttons tell the bar where they are", {"system", "clock", "controls"} <= set(bar.placed),
+            str(sorted(bar.placed)))
+    root.deleteLater()
+    spin(100)
+
+
 def main():
     global bar
     os.makedirs(SHOTS, exist_ok=True)
@@ -853,6 +961,8 @@ def main():
     d.texts_inside("front with every slider")
     d.shot("front-all")
     d.sheet(["front", "wifi-password", "bluetooth", "sound", "power", "edit-changed"], os.path.join(SHOTS, "sheet.png"))
+
+    check_buttons(engine, d)
 
     errors = [m for m in dict.fromkeys(messages)
               if any(word in m for word in ("TypeError", "ReferenceError", "Unable to assign", "Cannot assign",
