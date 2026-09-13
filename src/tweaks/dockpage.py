@@ -96,7 +96,7 @@ class DockBackend(QObject):
                 if info[0] == f"{ids.NAME} Dock: activate app 1" and info[6]:
                     key = QKeySequence(info[6][0]).toString()
                 elif info[0] == launchpad_name and info[6]:
-                    launchpad = QKeySequence(info[6][0]).toString()
+                    launchpad = ", ".join(QKeySequence(k).toString() for k in sorted(info[6]))
         except (ValueError, KeyError, IndexError, TypeError):
             pass
         if (key, launchpad) != (self._shortcut_key, self._launchpad_key):
