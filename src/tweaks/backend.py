@@ -3,12 +3,14 @@
 Everything that touches the session goes through here, so the QML stays a view.
 Long jobs (a remix rebuild) run in a thread and report progress line by line.
 """
+import configparser
 import json
 import os
 import re
 import shutil
 import subprocess
 import threading
+import time
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
 
@@ -40,6 +42,23 @@ PRESETS = [
     ("Amber", "#f7b955", "honey gold"),
 ]
 
+# what each install.sh extra does, said once it's done
+EXTRAS = {
+    "--gtk": "GTK apps get the Borealis colours when they next start.",
+    "--konsole": "Konsole opens with the Borealis profile.",
+    "--terminal": "New terminals pick up the Borealis colours.",
+    "--firefox": "Firefox is styled; restart it to see.",
+}
+
+# install-system.sh options, with what to say afterwards
+SYSTEM_WIDE = {
+    "": "Copied system-wide; now use Login Screen › Apply Plasma Settings.",
+    "--plymouth": "Done — the boot splash appears at the next start.",
+    "--plymouth-revert": "The previous boot splash is back from the next start.",
+    "--grub": "The Borealis boot menu appears at the next start.",
+    "--grub-revert": "The plain boot menu is back from the next start.",
+}
+
 
 def run(cmd, **kw):
     return subprocess.run(cmd, capture_output=True, text=True, **kw)
@@ -57,7 +76,40 @@ def kwrite(file, group, key, value):
     groups = []
     for g in group.split("/"):
         groups += ["--group", g]
-    run(["kwriteconfig6", "--file", file] + groups + ["--key", key, value])
+    # --notify: running apps that watch the file see the change at once
+    run(["kwriteconfig6", "--notify", "--file", file] + groups + ["--key", key, value])
+
+
+def read_text(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def firefox_profile():
+    """Firefox's default profile, found the way install.sh finds it."""
+    roots = (os.path.join(CONF, "mozilla", "firefox"), os.path.expanduser("~/.mozilla/firefox"))
+    for root in roots:
+        ini = os.path.join(root, "profiles.ini")
+        if not os.path.exists(ini):
+            continue
+        cp = configparser.ConfigParser(interpolation=None)
+        try:
+            cp.read(ini)
+        except configparser.Error:
+            continue
+        path = next((cp[s]["Default"] for s in cp.sections() if s.startswith("Install") and cp[s].get("Default")), "")
+        path = path or next((cp[s].get("Path", "") for s in cp.sections()
+                             if s.startswith("Profile") and cp[s].get("Default") == "1"), "")
+        path = path or next((cp[s]["Path"] for s in cp.sections() if s.startswith("Profile") and cp[s].get("Path")),
+                            "")
+        if path:
+            full = path if os.path.isabs(path) else os.path.join(root, path)
+            if os.path.isdir(full):
+                return full
+    return ""
 
 
 class Backend(QObject):
@@ -70,12 +122,22 @@ class Backend(QObject):
         super().__init__(parent)
         self._busy = False
         self._live_override = None
+        self._cache = {}
         self._state = {}
         if os.path.exists(STATE):
             try:
                 self._state = json.load(open(STATE))
             except ValueError:
                 pass
+
+    def _cached(self, key, compute, ttl=3.0):
+        """Slow answers (other programs) are kept for a moment: QML asks often."""
+        now = time.monotonic()
+        hit = self._cache.get(key)
+        if hit is None or now - hit[0] > ttl:
+            hit = (now, compute())
+            self._cache[key] = hit
+        return hit[1]
 
     # ---------------------------------------------------------- readers ---
     def _lnf(self):
@@ -138,15 +200,15 @@ class Backend(QObject):
         if self._live_override is not None:
             return self._live_override        # until plasmashell catches up
         live = self._state.get("live_id", "org.borealis.aurora")
-        return any(p == live for p in self._wallpaper_plugins())
+        return any(p == live for p in self._cached("wallpapers", self._wallpaper_plugins))
 
     @Property(bool, notify=changed)
     def flatpakColors(self):
         """True when Flatpak apps may read ~/.config/gtk-4.0."""
         if not shutil.which("flatpak"):
             return False
-        r = run(["flatpak", "override", "--user", "--show"])
-        return "xdg-config/gtk-4.0" in r.stdout
+        return self._cached("flatpak", lambda: "xdg-config/gtk-4.0" in run(["flatpak", "override", "--user",
+                                                                            "--show"]).stdout)
 
     @Property(bool, constant=True)
     def hasFlatpak(self):
@@ -154,14 +216,54 @@ class Backend(QObject):
 
     @Property(str, notify=changed)
     def bootSplash(self):
-        r = run(["plymouth-set-default-theme"])
-        return r.stdout.strip() if r.returncode == 0 else ""
+        def compute():
+            r = run(["plymouth-set-default-theme"]) if shutil.which("plymouth-set-default-theme") else None
+            return r.stdout.strip() if r is not None and r.returncode == 0 else ""
+        return self._cached("plymouth", compute)
+
+    @Property(bool, notify=changed)
+    def grubMenu(self):
+        """True when GRUB draws the Borealis menu (install-system.sh --grub)."""
+        m = re.search(r'^GRUB_THEME="?([^"\n]*)', read_text("/etc/default/grub"), re.M)
+        return bool(m and "borealis" in m.group(1).lower())
 
     @Property(bool, notify=changed)
     def systemWide(self):
         """The login screen can only use themes installed outside $HOME."""
         pkg = self._lnf()
         return bool(pkg) and os.path.isdir(f"/usr/local/share/plasma/look-and-feel/{pkg}")
+
+    @Property(bool, notify=changed)
+    def fontsInstalled(self):
+        def compute():
+            names = {n.strip() for line in run(["fc-list", ":", "family"]).stdout.splitlines()
+                     for n in line.split(",")}
+            return bool(names & {"Inter", "Inter Variable"}) and "JetBrains Mono" in names
+        return self._cached("fonts", compute)
+
+    @Property(bool, notify=changed)
+    def gtkColors(self):
+        """install.sh --gtk adds one @import of its own stylesheet to gtk.css."""
+        return bool(re.search(r"@import '[^']*-libadwaita\.css';",
+                              read_text(os.path.join(CONF, "gtk-4.0", "gtk.css"))))
+
+    @Property(bool, notify=changed)
+    def konsoleDefault(self):
+        return kread("konsolerc", "Desktop Entry", "DefaultProfile").lower().startswith("borealis")
+
+    @Property(bool, notify=changed)
+    def terminalKit(self):
+        return "/borealis/terminal/" in read_text(os.path.expanduser("~/.bashrc"))
+
+    @Property(bool, notify=changed)
+    def hasFirefox(self):
+        return bool(self._cached("firefox", firefox_profile))
+
+    @Property(bool, notify=changed)
+    def firefoxStyled(self):
+        profile = self._cached("firefox", firefox_profile)
+        css = read_text(os.path.join(profile, "chrome", "userChrome.css")) if profile else ""
+        return bool(re.search(r'@import "[^"]*-userChrome\.css";', css))
 
     @Property(bool, notify=changed)
     def hasProject(self):
@@ -195,8 +297,8 @@ class Backend(QObject):
             for label, cmd in steps:
                 self.logged.emit(f"$ {label}")
                 try:
-                    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                         text=True, cwd=PROJECT)
+                    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                         cwd=PROJECT if os.path.isdir(PROJECT) else None)
                 except OSError as e:
                     self.logged.emit(str(e))
                     ok = False
@@ -208,6 +310,7 @@ class Backend(QObject):
                     break
             if ok and on_success:
                 on_success()
+            self._cache.clear()
             self._set_busy(False)
             self.changed.emit()
             self.finished.emit(ok, done_msg if ok else "Something went wrong — see the log.")
@@ -248,11 +351,13 @@ class Backend(QObject):
                 run(["plasma-apply-wallpaperimage", wall])
         # show the new state at once; re-read once plasmashell has applied it
         self._live_override = on
+        self._cache.pop("wallpapers", None)
         self.changed.emit()
         threading.Timer(2.5, self._clear_override).start()
 
     def _clear_override(self):
         self._live_override = None
+        self._cache.pop("wallpapers", None)
         self.changed.emit()
 
     @Slot(str, str, bool, bool)
@@ -291,18 +396,31 @@ class Backend(QObject):
     @Slot()
     def grantFlatpakColors(self):
         run(["flatpak", "override", "--user", "--filesystem=xdg-config/gtk-4.0:ro"])
+        self._cache.pop("flatpak", None)
         self.changed.emit()
 
     @Slot(str)
     def installSystemWide(self, what):
         """install-system.sh needs root: ask through polkit, in the background."""
         script = os.path.join(PROJECT, "install-system.sh")
+        if what not in SYSTEM_WIDE:
+            return
         if not os.path.exists(script):
             return self.finished.emit(False, "install-system.sh was not found.")
         cmd = ["pkexec", script] + ([what] if what else [])
-        self._job([("pkexec install-system.sh " + what, cmd)],
-                  "Done — the boot splash appears at the next start."
-                  if what else "Copied system-wide; now use Login Screen › Apply Plasma Settings.")
+        self._job([("pkexec install-system.sh " + what, cmd)], SYSTEM_WIDE[what])
+
+    @Slot(str)
+    def installExtra(self, flag):
+        """One of install.sh's extras, for the variant already in use."""
+        if flag in EXTRAS:
+            self.runInstaller([flag], EXTRAS[flag])
+
+    @Slot()
+    def installFonts(self):
+        packages = ["rsms-inter-fonts", "jetbrains-mono-fonts"]
+        self._job([("pkexec dnf install " + " ".join(packages), ["pkexec", "dnf", "install", "-y"] + packages)],
+                  "Fonts installed. Apps pick them up when they next start.")
 
     def runInstaller(self, args, done_msg):
         script = os.path.join(PROJECT, "install.sh")
@@ -317,6 +435,7 @@ class Backend(QObject):
             "wallpaper": ["plasma-open-settings", "kcm_wallpaper"],
             "colors": ["systemsettings", "kcm_colors"],
             "login": ["systemsettings", "kcm_plasmalogin"],
+            "fonts": ["systemsettings", "kcm_fonts"],
         }
         cmd = cmds.get(what)
         if cmd and shutil.which(cmd[0]):

@@ -8,6 +8,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import QtQuick.Dialogs as Dialogs
 import org.kde.kirigami as Kirigami
+import "../controls"
 
 Kirigami.ScrollablePage {
     id: page
@@ -21,54 +22,14 @@ Kirigami.ScrollablePage {
         applicationWindow().showPassiveNotification(message, ok === false ? 9000 : 4000);
     }
 
-    // one of a few choices: [[value, label], …]
-    component Choice: QQC2.ComboBox {
-        id: combo
-        required property string key
-        property var choices: []
-        model: choices.map(c => c[1])
-        implicitContentWidthPolicy: QQC2.ComboBox.WidestText
-        currentIndex: Math.max(0, choices.findIndex(c => c[0] === dockSettings.values[combo.key]))
-        onActivated: index => {
-            dockSettings.set(combo.key, combo.choices[index][0]);
-            currentIndex = Qt.binding(() => Math.max(0, combo.choices.findIndex(c => c[0] === dockSettings.values[combo.key])));
-        }
+    component DockAmount: Amount {
+        target: dockSettings
     }
-
-    component Toggle: QQC2.Switch {
-        id: toggle
-        required property string key
-        checked: dockSettings.values[toggle.key] === true
-        onToggled: {
-            dockSettings.set(toggle.key, checked);
-            checked = Qt.binding(() => dockSettings.values[toggle.key] === true);
-        }
+    component DockChoice: Choice {
+        target: dockSettings
     }
-
-    component Amount: RowLayout {
-        id: amount
-        required property string key
-        property real from: 0
-        property real to: 100
-        property real stepSize: 1
-        property var describe: value => String(Math.round(value))
-        QQC2.Slider {
-            id: slider
-            Layout.fillWidth: true
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 11
-            from: amount.from
-            to: amount.to
-            stepSize: amount.stepSize
-            value: dockSettings.values[amount.key]
-            onMoved: dockSettings.set(amount.key, value)
-            onPressedChanged: if (!pressed) {
-                value = Qt.binding(() => dockSettings.values[amount.key]);
-            }
-        }
-        QQC2.Label {
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 4
-            text: amount.describe(slider.value)
-        }
+    component DockToggle: Toggle {
+        target: dockSettings
     }
 
     // a widget in the dock, or not
@@ -79,13 +40,6 @@ Kirigami.ScrollablePage {
         onToggled: {
             dockSettings.setWidget(widgetSwitch.kind, checked);
             checked = Qt.binding(() => (dockSettings.values.widgets || []).some(w => w.type === widgetSwitch.kind));
-        }
-    }
-
-    Connections {
-        target: backend
-        function onFinished(ok, message) {
-            applicationWindow().showPassiveNotification(message, ok ? 6000 : 12000);
         }
     }
 
@@ -190,16 +144,14 @@ Kirigami.ScrollablePage {
             }
         }
 
-        RowLayout {
+        Flow {
             Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
             QQC2.CheckBox {
                 id: includeApps
                 text: qsTr("With apps, Stacks and widgets")
                 QQC2.ToolTip.text: qsTr("Saving and exporting include what's in your dock; picking a preset that has them brings them in")
                 QQC2.ToolTip.visible: hovered
-            }
-            Item {
-                Layout.fillWidth: true
             }
             QQC2.Button {
                 text: qsTr("Save as Preset…")
@@ -219,30 +171,32 @@ Kirigami.ScrollablePage {
         }
 
         Kirigami.FormLayout {
+            id: mainForm
             Layout.fillWidth: true
+            twinFormLayouts: appsForm
 
             Kirigami.Separator {
                 Kirigami.FormData.isSection: true
                 Kirigami.FormData.label: qsTr("Place")
             }
-            Choice {
+            DockChoice {
                 Kirigami.FormData.label: qsTr("Screen edge:")
                 key: "position"
                 choices: [["bottom", qsTr("Bottom")], ["left", qsTr("Left")], ["right", qsTr("Right")]]
             }
-            Choice {
+            DockChoice {
                 Kirigami.FormData.label: qsTr("Show on:")
                 key: "screen"
                 choices: [["primary", qsTr("The primary screen")], ["all", qsTr("Every screen")],
                           ["follow", qsTr("The screen with the pointer")]]
             }
-            Choice {
+            DockChoice {
                 Kirigami.FormData.label: qsTr("Hiding:")
                 key: "hide"
                 choices: [["always", qsTr("Always visible")], ["dodge", qsTr("Hide when a window covers it")],
                           ["auto", qsTr("Hide when not in use")]]
             }
-            Amount {
+            DockAmount {
                 Kirigami.FormData.label: qsTr("Hide after:")
                 visible: dockSettings.values.hide === "auto"
                 key: "hideDelay"
@@ -255,7 +209,7 @@ Kirigami.ScrollablePage {
                 Kirigami.FormData.isSection: true
                 Kirigami.FormData.label: qsTr("Size")
             }
-            Amount {
+            DockAmount {
                 Kirigami.FormData.label: qsTr("Icons:")
                 key: "iconSize"
                 from: 24
@@ -263,7 +217,7 @@ Kirigami.ScrollablePage {
                 stepSize: 2
                 describe: value => qsTr("%1 px").arg(Math.round(value))
             }
-            Amount {
+            DockAmount {
                 Kirigami.FormData.label: qsTr("Magnification:")
                 key: "zoom"
                 from: 1
@@ -271,7 +225,7 @@ Kirigami.ScrollablePage {
                 stepSize: 0.05
                 describe: value => value <= 1.001 ? qsTr("Off") : qsTr("%1×").arg(value.toFixed(2))
             }
-            Amount {
+            DockAmount {
                 Kirigami.FormData.label: qsTr("Spread:")
                 key: "reach"
                 from: 1
@@ -279,13 +233,13 @@ Kirigami.ScrollablePage {
                 stepSize: 0.25
                 describe: value => qsTr("%1 icons").arg(value.toFixed(1))
             }
-            Amount {
+            DockAmount {
                 Kirigami.FormData.label: qsTr("Spacing:")
                 key: "spacing"
                 to: 24
                 describe: value => qsTr("%1 px").arg(Math.round(value))
             }
-            Amount {
+            DockAmount {
                 Kirigami.FormData.label: qsTr("Gap to the edge:")
                 key: "margin"
                 to: 40
@@ -296,45 +250,45 @@ Kirigami.ScrollablePage {
                 Kirigami.FormData.isSection: true
                 Kirigami.FormData.label: qsTr("Look")
             }
-            Toggle {
+            DockToggle {
                 Kirigami.FormData.label: qsTr("Frosted glass:")
                 key: "blur"
             }
-            Amount {
+            DockAmount {
                 Kirigami.FormData.label: qsTr("Background:")
                 key: "opacity"
                 to: 1
                 stepSize: 0.02
                 describe: value => qsTr("%1%").arg(Math.round(value * 100))
             }
-            Amount {
+            DockAmount {
                 Kirigami.FormData.label: qsTr("Corners:")
                 key: "radius"
                 to: 40
                 describe: value => qsTr("%1 px").arg(Math.round(value))
             }
-            Toggle {
+            DockToggle {
                 Kirigami.FormData.label: qsTr("Outline:")
                 key: "border"
             }
-            Choice {
+            DockChoice {
                 Kirigami.FormData.label: qsTr("Open apps:")
                 key: "indicator"
                 choices: [["dot", qsTr("A dot")], ["line", qsTr("A line")], ["none", qsTr("No mark")]]
             }
-            Toggle {
+            DockToggle {
                 Kirigami.FormData.label: qsTr("Dividers:")
                 key: "divider"
             }
-            Toggle {
+            DockToggle {
                 Kirigami.FormData.label: qsTr("Names on hover:")
                 key: "labels"
             }
-            Toggle {
+            DockToggle {
                 Kirigami.FormData.label: qsTr("Badges and progress:")
                 key: "badges"
             }
-            Toggle {
+            DockToggle {
                 Kirigami.FormData.label: qsTr("Trash:")
                 key: "showTrash"
             }
@@ -343,17 +297,17 @@ Kirigami.ScrollablePage {
                 Kirigami.FormData.isSection: true
                 Kirigami.FormData.label: qsTr("Behaviour")
             }
-            Choice {
+            DockChoice {
                 Kirigami.FormData.label: qsTr("Clicking the front app:")
                 key: "clickAction"
                 choices: [["expose", qsTr("Shows its windows")], ["cycle", qsTr("Steps through its windows")],
                           ["minimize", qsTr("Minimises it")]]
             }
-            Toggle {
+            DockToggle {
                 Kirigami.FormData.label: qsTr("Window previews:")
                 key: "previews"
             }
-            Amount {
+            DockAmount {
                 Kirigami.FormData.label: qsTr("Previews after:")
                 visible: dockSettings.values.previews === true
                 key: "previewDelay"
@@ -362,11 +316,11 @@ Kirigami.ScrollablePage {
                 stepSize: 50
                 describe: value => qsTr("%1 ms").arg(Math.round(value))
             }
-            Toggle {
+            DockToggle {
                 Kirigami.FormData.label: qsTr("Bounce while opening:")
                 key: "bounce"
             }
-            Amount {
+            DockAmount {
                 Kirigami.FormData.label: qsTr("Animations:")
                 key: "animation"
                 to: 2
@@ -375,7 +329,7 @@ Kirigami.ScrollablePage {
             }
             RowLayout {
                 Kirigami.FormData.label: qsTr("Meta+1…9:")
-                Toggle {
+                DockToggle {
                     key: "shortcuts"
                 }
                 QQC2.Label {
@@ -397,7 +351,7 @@ Kirigami.ScrollablePage {
                 Kirigami.FormData.isSection: true
                 Kirigami.FormData.label: qsTr("Launchpad")
             }
-            Toggle {
+            DockToggle {
                 Kirigami.FormData.label: qsTr("Icon in the dock:")
                 key: "launchpad"
             }
@@ -413,12 +367,7 @@ Kirigami.ScrollablePage {
                     onClicked: dockSettings.openShortcuts()
                 }
             }
-            QQC2.Label {
-                Layout.fillWidth: true
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
-                wrapMode: Text.WordWrap
-                opacity: 0.7
-                font: Kirigami.Theme.smallFont
+            Hint {
                 text: qsTr("Meta on its own works too: give it to “Launchpad” under KWin in the shortcut settings, after taking it off the application launcher (or whatever holds it).")
             }
 
@@ -432,7 +381,6 @@ Kirigami.ScrollablePage {
                     kind: "clock"
                 }
                 QQC2.ComboBox {
-                    id: clockStyle
                     visible: (dockSettings.values.widgets || []).some(w => w.type === "clock")
                     model: [qsTr("Analog"), qsTr("Digital")]
                     implicitContentWidthPolicy: QQC2.ComboBox.WidestText
@@ -468,61 +416,88 @@ Kirigami.ScrollablePage {
                 Kirigami.FormData.isSection: true
                 Kirigami.FormData.label: qsTr("Stacks")
             }
+        }
+
+        // Stacks sit outside the form: three choices per folder would widen its
+        // single narrow column past the window and push every value off the page
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 30
+            Layout.alignment: Qt.AlignHCenter
+            spacing: Kirigami.Units.largeSpacing
+
             Repeater {
                 model: dockSettings.values.stacks ? dockSettings.stackRows() : []
-                delegate: RowLayout {
+                delegate: ColumnLayout {
                     id: stackRow
                     required property var modelData
                     required property int index
                     readonly property var views: ["auto", "fan", "grid"]
                     readonly property var sorts: ["added", "modified", "name"]
                     readonly property var displays: ["stack", "folder"]
-                    Kirigami.FormData.label: index === 0 ? qsTr("Folders:") : ""
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
 
-                    Kirigami.Icon {
-                        source: stackRow.modelData.icon
-                        Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                        Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Kirigami.Icon {
+                            source: stackRow.modelData.icon
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                            Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
+                        }
+                        QQC2.Label {
+                            Layout.fillWidth: true
+                            text: stackRow.modelData.name
+                            elide: Text.ElideMiddle
+                            QQC2.ToolTip.text: stackRow.modelData.real
+                            QQC2.ToolTip.visible: nameHover.hovered
+                            HoverHandler {
+                                id: nameHover
+                            }
+                        }
+                        QQC2.ToolButton {
+                            icon.name: "list-remove"
+                            QQC2.ToolTip.text: qsTr("Remove from the dock")
+                            QQC2.ToolTip.visible: hovered
+                            onClicked: dockSettings.removeStack(stackRow.index)
+                        }
                     }
-                    QQC2.Label {
-                        Layout.minimumWidth: Kirigami.Units.gridUnit * 5
-                        text: stackRow.modelData.name
-                        QQC2.ToolTip.text: stackRow.modelData.real
-                        QQC2.ToolTip.visible: nameHover.hovered
-                        HoverHandler { id: nameHover }
-                    }
-                    QQC2.ComboBox {
-                        model: [qsTr("Automatic"), qsTr("Fan"), qsTr("Grid")]
-                        implicitContentWidthPolicy: QQC2.ComboBox.WidestText
-                        currentIndex: stackRow.views.indexOf(stackRow.modelData.view)
-                        onActivated: i => dockSettings.setStack(stackRow.index, "view", stackRow.views[i])
-                    }
-                    QQC2.ComboBox {
-                        model: [qsTr("Date added"), qsTr("Date modified"), qsTr("Name")]
-                        implicitContentWidthPolicy: QQC2.ComboBox.WidestText
-                        currentIndex: stackRow.sorts.indexOf(stackRow.modelData.sort)
-                        onActivated: i => dockSettings.setStack(stackRow.index, "sort", stackRow.sorts[i])
-                    }
-                    QQC2.ComboBox {
-                        model: [qsTr("Stack"), qsTr("Folder")]
-                        implicitContentWidthPolicy: QQC2.ComboBox.WidestText
-                        currentIndex: stackRow.displays.indexOf(stackRow.modelData.display)
-                        onActivated: i => dockSettings.setStack(stackRow.index, "display", stackRow.displays[i])
-                    }
-                    QQC2.ToolButton {
-                        icon.name: "list-remove"
-                        QQC2.ToolTip.text: qsTr("Remove from the dock")
-                        QQC2.ToolTip.visible: hovered
-                        onClicked: dockSettings.removeStack(stackRow.index)
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+                        QQC2.ComboBox {
+                            model: [qsTr("Automatic"), qsTr("Fan"), qsTr("Grid")]
+                            implicitContentWidthPolicy: QQC2.ComboBox.WidestText
+                            currentIndex: stackRow.views.indexOf(stackRow.modelData.view)
+                            onActivated: i => dockSettings.setStack(stackRow.index, "view", stackRow.views[i])
+                        }
+                        QQC2.ComboBox {
+                            model: [qsTr("Date added"), qsTr("Date modified"), qsTr("Name")]
+                            implicitContentWidthPolicy: QQC2.ComboBox.WidestText
+                            currentIndex: stackRow.sorts.indexOf(stackRow.modelData.sort)
+                            onActivated: i => dockSettings.setStack(stackRow.index, "sort", stackRow.sorts[i])
+                        }
+                        QQC2.ComboBox {
+                            model: [qsTr("Stack"), qsTr("Folder")]
+                            implicitContentWidthPolicy: QQC2.ComboBox.WidestText
+                            currentIndex: stackRow.displays.indexOf(stackRow.modelData.display)
+                            onActivated: i => dockSettings.setStack(stackRow.index, "display", stackRow.displays[i])
+                        }
                     }
                 }
             }
+
             QQC2.Button {
-                Kirigami.FormData.label: dockSettings.values.stacks && dockSettings.values.stacks.length ? "" : qsTr("Folders:")
                 text: qsTr("Add a folder…")
                 icon.name: "folder-new"
                 onClicked: folderDialog.open()
             }
+        }
+
+        Kirigami.FormLayout {
+            id: appsForm
+            Layout.fillWidth: true
+            twinFormLayouts: mainForm
 
             Kirigami.Separator {
                 Kirigami.FormData.isSection: true
@@ -539,12 +514,7 @@ Kirigami.ScrollablePage {
                     onClicked: dockSettings.resetPins()
                 }
             }
-            QQC2.Label {
-                Layout.fillWidth: true
-                Layout.maximumWidth: Kirigami.Units.gridUnit * 26
-                wrapMode: Text.WordWrap
-                opacity: 0.7
-                font: Kirigami.Theme.smallFont
+            Hint {
                 text: qsTr("Drag icons along the dock to reorder them, or off it to remove them. Drop an app from Launchpad or the launcher onto the dock to pin it, or a folder to make it a Stack.")
             }
         }
@@ -553,15 +523,13 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
         }
 
-        RowLayout {
+        Flow {
             Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
             QQC2.Button {
                 text: qsTr("Reset look and behaviour")
                 icon.name: "edit-undo"
                 onClicked: dockSettings.resetLook()
-            }
-            Item {
-                Layout.fillWidth: true
             }
             QQC2.Button {
                 visible: dockSettings.installed
@@ -585,6 +553,8 @@ Kirigami.ScrollablePage {
             font: Kirigami.Theme.smallFont
             text: qsTr("Settings file: %1").arg(dockSettings.configPath)
         }
+
+        JobLog {}
     }
 
     Dialogs.FolderDialog {

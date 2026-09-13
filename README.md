@@ -265,11 +265,29 @@ and brightness and volume sliders.
 ### Borealis Tweaks (the app)
 
 `install.sh` also installs a small app — look for **Borealis Tweaks** in your
-launcher. It switches between Dark, Light and day/night, turns the animated
-aurora on or off, rebuilds the whole theme around a colour you pick (seven
-presets or a custom colour), and restores any earlier backup. The heavy lifting
-is the same `build.py` and `install.sh` used here, so anything it does can be
-undone from the terminal. It needs PySide6 (`sudo dnf install python3-pyside6`).
+launcher. Its sidebar has a page for each part of Borealis:
+
+- **Theme** switches between Dark, Light and day/night, turns the animated
+  aurora on or off, and rebuilds the whole theme around a colour you pick
+  (seven presets or a custom colour).
+- **Dock** has every setting of the standalone dock, with presets you can save,
+  import and export. Sliders show their value as you drag.
+- **System** covers what lives outside Plasma: copying the theme system-wide
+  for the login screen, the boot splash and boot menu, the Inter and JetBrains
+  Mono fonts, GTK and Flatpak apps, Konsole's profile, the command-line colours,
+  Firefox, and restoring any earlier backup.
+
+The heavy lifting is the same `build.py`, `install.sh` and `install-system.sh`
+used here, so anything it does can be undone from the terminal. Open it on a
+page with `--page dock` or `--page system`. It needs PySide6
+(`sudo dnf install python3-pyside6`).
+
+`--konsole`, `--gtk`, `--flatpak`, `--terminal` and `--firefox` also work
+without `--apply`; they then style the variant you already use:
+
+```bash
+./install.sh --terminal --gtk
+```
 
 ### Remix it onto another accent
 

@@ -29,12 +29,17 @@ Keywords=theme;colour;color;accent;wallpaper;aurora;{NAME};
 StartupNotify=true
 X-KDE-StartupNotify=true
 X-Borealis-App={SLUG.lower()}-tweaks
-Actions=dock;
+Actions=dock;system;
 
 [Desktop Action dock]
 Name=Dock Settings
 Icon=configure
 Exec=@EXEC@ --page dock
+
+[Desktop Action system]
+Name=Login, Boot and Apps
+Icon=preferences-system
+Exec=@EXEC@ --page system
 """
 
 

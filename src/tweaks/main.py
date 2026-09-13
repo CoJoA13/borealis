@@ -2,7 +2,7 @@
 """Borealis Tweaks: a small desktop app for the Borealis theme.
 
     borealis-tweaks           open the window
-    borealis-tweaks --page dock   open it on the Dock page
+    borealis-tweaks --page dock   open it on the Dock page (or theme, system)
     BOREALIS_PROJECT=~/src/Borealis borealis-tweaks     use another checkout
 """
 import os
@@ -21,11 +21,14 @@ except ImportError:
 from backend import Backend  # noqa: E402
 from dockpage import DockBackend  # noqa: E402
 
+# the pages in ui/main.qml's sidebar, by name
+PAGES = ("theme", "dock", "system")
+
 
 def main():
     import argparse
     ap = argparse.ArgumentParser(description="Borealis Tweaks")
-    ap.add_argument("--page", choices=("theme", "dock"), default="theme")
+    ap.add_argument("--page", choices=PAGES, default="theme")
     args, qt_args = ap.parse_known_args()
     app = QGuiApplication([sys.argv[0]] + qt_args)
     app.setApplicationName("Borealis Tweaks")

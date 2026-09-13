@@ -26,8 +26,11 @@
 #   --flatpak   ...for Flatpak apps too (implies --gtk; lets every Flatpak app
 #               read ~/.config/gtk-4.0, read-only)
 #
-# Whenever --apply is used, your current settings are backed up first; the
-# exact restore command is printed at the end.
+# --konsole, --gtk, --flatpak, --terminal and --firefox also work without
+# --apply: then they style the variant you already use.
+#
+# Whenever --apply or one of those is used, the settings it changes are backed
+# up first; the exact restore command is printed at the end.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -52,7 +55,7 @@ while [ $# -gt 0 ]; do
         --dock-revert) DOCK_REVERT=1; shift ;;
         --dock-merge) DOCK=1; DOCK_MERGE=1; shift ;;
         --from) SRC="${2:-}"; shift 2 ;;
-        -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -60,9 +63,11 @@ case "$APPLY" in ""|dark|light) ;; *) echo "--apply takes 'dark' or 'light'" >&2
 if [ $DOCK = 1 ] && [ $DOCK_REVERT = 1 ]; then
     echo "--dock and --dock-revert contradict each other" >&2; exit 2
 fi
-if [ -z "$APPLY" ] && { [ $LAYOUT = 1 ] || [ $AUTO = 1 ] || [ $KONSOLE = 1 ] || [ $LIVE = 1 ] || [ $GTK = 1 ] || [ $TERMINAL = 1 ] || [ $FIREFOX = 1 ]; }; then
-    echo "--layout, --auto, --konsole, --live, --gtk, --flatpak, --terminal and --firefox need --apply dark|light" >&2; exit 2
+if [ -z "$APPLY" ] && { [ $LAYOUT = 1 ] || [ $AUTO = 1 ] || [ $LIVE = 1 ]; }; then
+    echo "--layout, --auto and --live need --apply dark|light" >&2; exit 2
 fi
+EXTRAS=0
+if [ $KONSOLE = 1 ] || [ $GTK = 1 ] || [ $TERMINAL = 1 ] || [ $FIREFOX = 1 ]; then EXTRAS=1; fi
 
 if [ ! -d "$SRC" ]; then
     echo "build/share not found — building first…"
@@ -346,6 +351,84 @@ TITLE_DARK="$(meta_name "$SRC/plasma/look-and-feel/$THEME_DARK/metadata.json")"
 TITLE_LIGHT="$(meta_name "$SRC/plasma/look-and-feel/$THEME_LIGHT/metadata.json")"
 : "${TITLE_DARK:=$THEME_DARK}" "${TITLE_LIGHT:=$THEME_LIGHT}"
 
+# --- the extras: Konsole, the command line, Firefox, GTK and Flatpak apps -----
+FFPROFILE=""
+backup_extras() {   # into $BACKUP: what the chosen extras are about to change
+    if [ $TERMINAL = 1 ]; then
+        if [ -f "$HOME/.bashrc" ]; then cp -a "$HOME/.bashrc" "$BACKUP/bashrc"; else touch "$BACKUP/bashrc.absent"; fi
+    fi
+    if [ $FIREFOX = 1 ]; then
+        FFPROFILE="$(ff_profile || true)"
+        if [ -n "$FFPROFILE" ]; then
+            mkdir -p "$BACKUP/firefox"
+            for f in chrome/userChrome.css chrome/userContent.css user.js; do
+                if [ -f "$FFPROFILE/$f" ]; then cp -a "$FFPROFILE/$f" "$BACKUP/firefox/$(basename "$f")"; fi
+            done
+            printf '%s\n' "$FFPROFILE" > "$BACKUP/firefox/profile-path"
+        fi
+    fi
+    if [ $GTK = 1 ]; then
+        mkdir -p "$BACKUP/gtk-4.0"
+        if [ -f "$CONF/gtk-4.0/gtk.css" ]; then cp -a "$CONF/gtk-4.0/gtk.css" "$BACKUP/gtk-4.0/"; else touch "$BACKUP/gtk-4.0/.absent"; fi
+    fi
+    return 0
+}
+apply_extras() {    # variant (dark|light), Konsole profile
+    if [ $KONSOLE = 1 ]; then
+        kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile "$2"
+        echo "  Konsole opens with the ${2%.profile} profile"
+    fi
+    if [ $TERMINAL = 1 ]; then
+        TERMDIR="$CONF/borealis/terminal"
+        mkdir -p "$TERMDIR" "$CONF/bat/themes"
+        cp "$TERMSRC/"* "$TERMDIR/"
+        cp "$TERMSRC/"*.tmTheme "$CONF/bat/themes/"
+        if command -v bat >/dev/null; then bat cache --build >/dev/null 2>&1 || true; fi
+        LINE="source $TERMDIR/borealis-$1.bash"
+        if ! grep -qxF "$LINE" "$HOME/.bashrc" 2>/dev/null; then
+            printf '\n# Borealis colors for the command line\n%s\n' "$LINE" >> "$HOME/.bashrc"
+        fi
+        echo "  terminal kit in $TERMDIR (new shells pick it up; see its README.md for tmux and git)"
+    fi
+    if [ $FIREFOX = 1 ]; then
+        if [ -z "$FFPROFILE" ] || [ -z "$FFSRC" ]; then
+            echo "  Firefox: no profile found — start Firefox once, then re-run with --firefox"
+        else
+            mkdir -p "$FFPROFILE/chrome"
+            cp "$FFSRC"/*.css "$FFPROFILE/chrome/"
+            for part in userChrome userContent; do
+                css="$FFPROFILE/chrome/$part.css"
+                imp="@import \"$(basename "$(ls "$FFSRC"/*-$part.css)")\";"
+                if ! grep -qxF "$imp" "$css" 2>/dev/null; then
+                    # @import has to come first in a CSS file
+                    printf '%s\n' "$imp" > "$css.borealis-tmp"
+                    if [ -f "$css" ]; then cat "$css" >> "$css.borealis-tmp"; fi
+                    mv "$css.borealis-tmp" "$css"
+                fi
+            done
+            pref='user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);'
+            grep -qF 'legacyUserProfileCustomizations' "$FFPROFILE/user.js" 2>/dev/null || \
+                printf '%s\n' "$pref" >> "$FFPROFILE/user.js"
+            echo "  Firefox styled (restart it): $FFPROFILE"
+        fi
+    fi
+    if [ $GTK = 1 ]; then
+        # our own file + one import line; KDE rewrites gtk.css but keeps extra lines
+        install -Dm644 "$(ls "$SRC"/gtk/*/"$GTKCSS")" "$CONF/gtk-4.0/$GTKCSS"
+        grep -qxF "@import '$GTKCSS';" "$CONF/gtk-4.0/gtk.css" 2>/dev/null || \
+            printf "\n@import '%s';\n" "$GTKCSS" >> "$CONF/gtk-4.0/gtk.css"
+        echo "  GTK4 apps pick up the Borealis colors when they next start."
+    fi
+    if [ $FLATPAK = 1 ] && command -v flatpak >/dev/null; then
+        if ! flatpak override --user --show | grep -q 'xdg-config/gtk-4\.0'; then
+            flatpak override --user --filesystem=xdg-config/gtk-4.0:ro
+            touch "$BACKUP/flatpak-override-added"
+        fi
+        echo "  Flatpak apps may now read ~/.config/gtk-4.0 (read-only); restart open ones."
+    fi
+    return 0
+}
+
 echo "Installing $THEME_NAME into $DEST"
 for item in "${ITEMS[@]}"; do
     [ -e "$SRC/$item" ] || { echo "  skip (not built): $item"; continue; }
@@ -405,18 +488,36 @@ command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 >/dev/null 2>&1 || true
 if [ $DOCK = 0 ] && [ $DOCK_REVERT = 0 ]; then
     dock_refresh
 fi
+if [ -z "$APPLY" ] && [ $EXTRAS = 1 ]; then
+    # just the extras, for the variant already in use
+    VARIANT=dark; PROFILE="$TITLE_DARK.profile"
+    case "$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage 2>/dev/null)" in
+        *-Light) VARIANT=light; PROFILE="$TITLE_LIGHT.profile" ;;
+    esac
+    BACKUP="$HOME/.local/state/borealis-backup/$(date +%Y%m%d-%H%M%S)-extras"
+    mkdir -p "$BACKUP"
+    if [ $KONSOLE = 1 ]; then
+        if [ -f "$CONF/konsolerc" ]; then cp -a "$CONF/konsolerc" "$BACKUP/"; else echo konsolerc >> "$BACKUP/.absent"; fi
+    fi
+    backup_extras
+    echo "Backed up what changes to $BACKUP"
+    apply_extras "$VARIANT" "$PROFILE"
+fi
 if [ -z "$APPLY" ] && { [ $PANELS = 1 ] || [ $DOCK = 1 ] || [ $DOCK_REVERT = 1 ]; }; then
     if [ $PANELS = 1 ]; then panels_update; fi
     if [ $DOCK_REVERT = 1 ]; then dock_revert; fi
     if [ $DOCK = 1 ]; then dock_enable; fi
-    echo
-    echo "Done."
-    exit 0
 fi
 if [ -z "$APPLY" ]; then
     echo
-    echo "Done. Pick '$TITLE_DARK' or '$TITLE_LIGHT' in"
-    echo "System Settings › Colors & Themes › Global Theme  (or run ./install.sh --apply dark)."
+    if [ $EXTRAS = 1 ]; then
+        echo "Done. To undo:  ./uninstall.sh --restore \"$BACKUP\""
+    elif [ $PANELS = 1 ] || [ $DOCK = 1 ] || [ $DOCK_REVERT = 1 ]; then
+        echo "Done."
+    else
+        echo "Done. Pick '$TITLE_DARK' or '$TITLE_LIGHT' in"
+        echo "System Settings › Colors & Themes › Global Theme  (or run ./install.sh --apply dark)."
+    fi
     exit 0
 fi
 
@@ -431,23 +532,7 @@ for f in kdeglobals kwinrc kcminputrc plasmarc ksplashrc kscreenlockerrc konsole
     if [ -f "$CONF/$f" ]; then cp -a "$CONF/$f" "$BACKUP/"; else echo "$f" >> "$BACKUP/.absent"; fi
 done
 if [ -d "$CONF/kdedefaults" ]; then cp -a "$CONF/kdedefaults" "$BACKUP/kdedefaults"; fi
-if [ $TERMINAL = 1 ]; then
-    if [ -f "$HOME/.bashrc" ]; then cp -a "$HOME/.bashrc" "$BACKUP/bashrc"; else touch "$BACKUP/bashrc.absent"; fi
-fi
-if [ $FIREFOX = 1 ]; then
-    FFPROFILE="$(ff_profile || true)"
-    if [ -n "$FFPROFILE" ]; then
-        mkdir -p "$BACKUP/firefox"
-        for f in chrome/userChrome.css chrome/userContent.css user.js; do
-            [ -f "$FFPROFILE/$f" ] && cp -a "$FFPROFILE/$f" "$BACKUP/firefox/$(basename "$f")"
-        done
-        printf '%s\n' "$FFPROFILE" > "$BACKUP/firefox/profile-path"
-    fi
-fi
-if [ $GTK = 1 ]; then
-    mkdir -p "$BACKUP/gtk-4.0"
-    if [ -f "$CONF/gtk-4.0/gtk.css" ]; then cp -a "$CONF/gtk-4.0/gtk.css" "$BACKUP/gtk-4.0/"; else touch "$BACKUP/gtk-4.0/.absent"; fi
-fi
+backup_extras
 echo "Backed up your current settings to $BACKUP"
 
 # --- apply ----------------------------------------------------------------
@@ -468,9 +553,6 @@ fi
 # Fedora pins the lock screen to its own wallpaper; point it at Borealis
 kwriteconfig6 --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image \
     --group General --key Image "file://$DEST/wallpapers/$THEME_NAME-Lock/"
-if [ $KONSOLE = 1 ]; then
-    kwriteconfig6 --file konsolerc --group "Desktop Entry" --key DefaultProfile "$PROFILE"
-fi
 # Global Themes can't set the sound theme; do it here
 kwriteconfig6 --file kdeglobals --group Sounds --key Theme "$SOUND_ID"
 if [ $LIVE = 1 ]; then
@@ -479,18 +561,7 @@ if [ $LIVE = 1 ]; then
         >/dev/null 2>&1 || echo "  (couldn't reach plasmashell; pick the '$THEME_NAME' animated wallpaper under Configure Desktop › Wallpaper)"
     kwriteconfig6 --file kscreenlockerrc --group Greeter --key WallpaperPlugin "$LIVE_ID"
 fi
-if [ $TERMINAL = 1 ]; then
-    TERMDIR="$CONF/borealis/terminal"
-    mkdir -p "$TERMDIR" "$CONF/bat/themes"
-    cp "$TERMSRC/"* "$TERMDIR/"
-    cp "$TERMSRC/"*.tmTheme "$CONF/bat/themes/"
-    command -v bat >/dev/null && bat cache --build >/dev/null 2>&1 || true
-    LINE="source $TERMDIR/borealis-$APPLY.bash"
-    if ! grep -qxF "$LINE" "$HOME/.bashrc" 2>/dev/null; then
-        printf '\n# Borealis colors for the command line\n%s\n' "$LINE" >> "$HOME/.bashrc"
-    fi
-    echo "  terminal kit in $TERMDIR (new shells pick it up; see its README.md for tmux and git)"
-fi
+apply_extras "$APPLY" "$PROFILE"
 if [ $PANELS = 1 ]; then
     panels_update
 fi
@@ -499,42 +570,6 @@ if [ $DOCK_REVERT = 1 ]; then
 fi
 if [ $DOCK = 1 ]; then
     dock_enable
-fi
-if [ $FIREFOX = 1 ]; then
-    if [ -z "${FFPROFILE:-}" ] || [ -z "$FFSRC" ]; then
-        echo "  Firefox: no profile found — start Firefox once, then re-run with --firefox"
-    else
-        mkdir -p "$FFPROFILE/chrome"
-        cp "$FFSRC"/*.css "$FFPROFILE/chrome/"
-        for part in userChrome userContent; do
-            css="$FFPROFILE/chrome/$part.css"
-            imp="@import \"$(basename "$(ls "$FFSRC"/*-$part.css)")\";"
-            if ! grep -qxF "$imp" "$css" 2>/dev/null; then
-                # @import has to come first in a CSS file
-                printf '%s\n' "$imp" > "$css.borealis-tmp"
-                [ -f "$css" ] && cat "$css" >> "$css.borealis-tmp"
-                mv "$css.borealis-tmp" "$css"
-            fi
-        done
-        pref='user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);'
-        grep -qF 'legacyUserProfileCustomizations' "$FFPROFILE/user.js" 2>/dev/null || \
-            printf '%s\n' "$pref" >> "$FFPROFILE/user.js"
-        echo "  Firefox styled (restart it): $FFPROFILE"
-    fi
-fi
-if [ $GTK = 1 ]; then
-    # our own file + one import line; KDE rewrites gtk.css but keeps extra lines
-    install -Dm644 "$(ls "$SRC"/gtk/*/"$GTKCSS")" "$CONF/gtk-4.0/$GTKCSS"
-    grep -qxF "@import '$GTKCSS';" "$CONF/gtk-4.0/gtk.css" 2>/dev/null || \
-        printf "\n@import '%s';\n" "$GTKCSS" >> "$CONF/gtk-4.0/gtk.css"
-    echo "  GTK4 apps pick up the Borealis colors when they next start."
-fi
-if [ $FLATPAK = 1 ] && command -v flatpak >/dev/null; then
-    if ! flatpak override --user --show | grep -q 'xdg-config/gtk-4\.0'; then
-        flatpak override --user --filesystem=xdg-config/gtk-4.0:ro
-        touch "$BACKUP/flatpak-override-added"
-    fi
-    echo "  Flatpak apps may now read ~/.config/gtk-4.0 (read-only); restart open ones."
 fi
 if ! fc-list | grep -qi "Inter" || ! fc-list | grep -qi "JetBrains Mono"; then
     echo
