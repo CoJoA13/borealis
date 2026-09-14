@@ -61,11 +61,24 @@ def check_shell():
 # anything about our code, so those import errors are skipped. Everything else
 # (syntax, unknown properties in resolvable types) still fails the check.
 MISSING_MODULE = re.compile(r'module "(org\.kde\.[\w.]+|Qt5Compat[\w.]*)" is not installed')
+# one of our own types that needs such a module can't load either, and a file
+# using it gets "Type X unavailable", followed by X's own errors
+UNAVAILABLE = re.compile(r"\bType [\w.]+ unavailable\b")
 # a Loader whose id is one of its own properties: inside the Loader's inline
 # components the name means the property (for `item`, the loaded object
 # itself), so `item.window` quietly reads undefined. It broke every click on
 # the bar once, with no error until a click.
 LOADER_ID_CLASH = re.compile(r"\bLoader\s*\{[^{}]*?\bid:\s*(item|source|sourceComponent|status|active|progress)\b")
+
+
+def qml_problems(messages):
+    """Which of one file's QML errors are ours to fix. A missing KDE module
+    isn't, and nor is a type of ours that failed only for want of one."""
+    missing = [m for m in messages if MISSING_MODULE.search(m)]
+    rest = [m for m in messages if not MISSING_MODULE.search(m)]
+    if missing and all(UNAVAILABLE.search(m) for m in rest):
+        return []
+    return rest
 
 
 def check_qml():
@@ -85,11 +98,7 @@ def check_qml():
     problems = []
     for f in files:
         comp = QQmlComponent(engine, QUrl.fromLocalFile(f))
-        for e in comp.errors():
-            msg = e.toString()
-            if MISSING_MODULE.search(msg):
-                continue        # provided by Plasma at run time
-            problems.append(msg)
+        problems += qml_problems([e.toString() for e in comp.errors()])
         clash = LOADER_ID_CLASH.search(open(f, encoding="utf-8").read())
         if clash:
             problems.append(f"{os.path.relpath(f, HERE)}: a Loader with id '{clash.group(1)}' hides its own "
