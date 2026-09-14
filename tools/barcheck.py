@@ -522,6 +522,7 @@ class Bar(QObject):
         self._battery, self._media = Battery(self), Media(self)
         self._windows, self._appmenu = Windows(self), AppMenu(self)
         self._toggles = {"night": False, "dark": True, "aurora": True, "known": True}
+        self._sessions = {"lock": True, "suspend": True, "reboot": True, "shutdown": True, "logout": True}
         self.controls = {}
         self.placed = {}
         self.sessionRequested.connect(lambda action: record("bar.session", action))
@@ -550,6 +551,7 @@ class Bar(QObject):
     battery = Property(QObject, lambda self: self._battery, constant=True)
     media = Property(QObject, lambda self: self._media, constant=True)
     toggles = Property("QVariantMap", lambda self: self._toggles, notify=changed)
+    sessionCapabilities = Property("QVariantMap", lambda self: self._sessions, notify=changed)
     allPills = Property("QVariantList", lambda self: list(bar_settings.PILLS), constant=True)
     canCapture = Property(bool, lambda self: True, constant=True)
     name = Property(str, lambda self: "Borealis", constant=True)
@@ -931,6 +933,26 @@ def main():
     d.shot("screenshot")
     d.click(d.find("capture-region"))
     d.check("a region screenshot goes to Spectacle", d.called("bar.capture", "region"))
+
+    # the power button's page (never the real thing: `bar` only writes it down)
+    d.show("")
+    d.click(d.find("session"))
+    d.check("the power button slides in its page", d.page() == "session", d.page())
+    d.texts_inside("Sleep, Restart or Shut Down page")
+    d.shot("session")
+    d.check("the page offers Sleep, Restart, Shut Down and Log Out",
+            all(d.find("session-" + key) for key in ("sleep", "restart", "shutdown", "logout")))
+    before = len(calls)
+    d.click(d.find("session-restart"))
+    d.check("Restart goes to Plasma's own confirmation, with the Control Center out of the way",
+            ("dismissed",) in calls[before:] and ("bar.session", "restart") in calls[before:], str(calls[before:]))
+    bar._sessions = {**bar._sessions, "suspend": False}
+    bar.changed.emit()
+    spin(300)
+    d.check("what this computer can't do stays out of sight",
+            d.find("session-sleep") is None and d.find("session-shutdown") is not None)
+    bar._sessions = {**bar._sessions, "suspend": True}
+    bar.changed.emit()
 
     # edit mode
     d.show("")

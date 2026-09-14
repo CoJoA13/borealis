@@ -61,6 +61,7 @@ class Controller(QObject):
     # title, text, confirm label, action
     confirmRequested = Signal(str, str, str, str)
     sessionRequested = Signal(str)
+    sessionCapabilitiesChanged = Signal()
     closeRequested = Signal()
     # a Control Center page to show ("" for its front, "edit" for edit mode)
     controlsPageRequested = Signal(str)
@@ -193,6 +194,12 @@ class Controller(QObject):
     @Slot("QVariantMap")
     def setSessionCapabilities(self, caps):
         self._sessions = dict(caps)
+        self.sessionCapabilitiesChanged.emit()
+
+    @Property("QVariantMap", notify=sessionCapabilitiesChanged)
+    def sessionCapabilities(self):
+        """What Plasma allows: lock, suspend, reboot, shutdown, logout."""
+        return self._sessions
 
     @Slot(str, QObject, float, float, float, float)
     def openAppMenu(self, key, screen, x, y, w, h):

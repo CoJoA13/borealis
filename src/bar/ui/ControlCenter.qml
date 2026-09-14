@@ -30,7 +30,7 @@ Card {
     readonly property var pageFiles: ({
         wifi: "pages/WifiPage.qml", bluetooth: "pages/BluetoothPage.qml", sound: "pages/SoundPage.qml",
         power: "pages/PowerPage.qml", dnd: "pages/DndPage.qml", hotspot: "pages/HotspotPage.qml",
-        screenshot: "pages/CapturePage.qml", record: "pages/CapturePage.qml"
+        screenshot: "pages/CapturePage.qml", record: "pages/CapturePage.qml", session: "pages/SessionPage.qml"
     })
     readonly property var names: ({
         wifi: qsTr("Wi-Fi"), bluetooth: qsTr("Bluetooth"), night: qsTr("Night Light"), power: qsTr("Power Mode"),
@@ -451,13 +451,11 @@ Card {
                     }
                 }
                 IconButton {
+                    objectName: "session"
                     visible: !center.editing
                     iconName: "system-shutdown"
-                    tip: qsTr("Shut Down, Restart or Log Out")
-                    onClicked: {
-                        center.dismissed();
-                        bar.sessionRequested("shutdown");
-                    }
+                    tip: qsTr("Sleep, Restart, Shut Down or Log Out")
+                    onClicked: center.openPage("session")
                 }
             }
 
